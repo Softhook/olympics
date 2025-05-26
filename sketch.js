@@ -26,6 +26,7 @@ const SH_NUM_TARGETS = 5; const SH_TARGET_SIZE = 40;
 let archCursorY, archPower, archMaxPower, archWindSpeed, archTargetCenterX, archTargetCenterY, archTargetSize, archArrows, archScore, archPhase, archPowerMeter, archArcherX;
 // Football (penalty) variables  
 let fbCursorX, fbCursorY, fbCursorSpeedX, fbCursorSpeedY, fbGoalWidth, fbGoalHeight, fbGoalX, fbGoalY, fbGoalkeeperX, fbGoalkeeperY, fbBallX, fbBallY, fbBallVX, fbBallVY, fbScore, fbPhase;
+let fbGravity; // Added for football gravity
 
 const SPORTS = ["RUNNING", "LONG_JUMP", "DISCUS", "HIGH_JUMP", "SWIMMING", "SKATING", "SHOOTING", "ARCHERY", "FOOTBALL"];
 
@@ -42,6 +43,10 @@ function setup() {
 function resetAllSports() {
     resetRunning(); resetLongJump(); resetDiscus(); resetHighJump();
     resetSwimming(); resetSkating(); resetShooting(); resetArchery(); resetFootball();
+    // Explicitly reset scores for sports that accumulate them across retries within a session
+    fbScore = 0; 
+    // archScore = 0; // If archery score should also reset here
+    // shScore = 0; // If shooting score should also reset here
 }
 
 function resetRunning() {
@@ -126,7 +131,10 @@ function resetFootball() {
     fbGoalkeeperX = fbGoalX + fbGoalWidth * 0.5;
     fbGoalkeeperY = fbGoalY + fbGoalHeight/2;
     fbBallX = width * 0.5; fbBallY = height * 0.75;
-    fbBallVX = 0; fbBallVY = 0; fbScore = 0; fbPhase = 'instructions';
+    fbBallVX = 0; fbBallVY = 0;
+    // fbScore = 0; // REMOVED - Score is reset when game selected from menu or in resetAllSports
+    fbPhase = 'instructions';
+    fbGravity = 0.1; // Initialize football gravity
 }
 
 function spawnNewTarget(index) {
@@ -920,12 +928,31 @@ function drawFootball() {
         drawPlayer8Bit(fbBallX - player.size * 0.8, fbBallY, player.size, fbPhase === 'ready' ? "jumping_power" : "idle");
     }
     
-    // Draw ball
+    // Draw ball - MOVED EARLIER
     noStroke(); fill(0, 0, 100);
     ellipse(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6);
     
+    // Ball rotation visual effect (only if kicked)
+    if (fbPhase === 'kicked') {
+        let rotateFrames = floor(globalFrameCount / 3) % 4;
+        stroke(0); strokeWeight(pixelUnit/4); noFill();
+        if (rotateFrames === 0) {
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, 0, PI/2);
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI, PI*3/2);
+        } else if (rotateFrames === 1) {
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI/4, PI*3/4);
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*5/4, PI*7/4);
+        } else if (rotateFrames === 2) {
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI/2, PI);
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*3/2, PI*2);
+        } else {
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*3/4, PI*5/4);
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*7/4, PI*9/4);
+        }
+    }
+    
     if (fbPhase === 'aiming') {
-        // Allow manual control with arrow keys
+        // Manual aim with arrow keys
         if (keyIsDown(LEFT_ARROW)) {
             fbCursorX -= 3;
         } else if (keyIsDown(RIGHT_ARROW)) {
@@ -964,50 +991,57 @@ function drawFootball() {
         // Move the ball
         fbBallX += fbBallVX;
         fbBallY += fbBallVY;
+        fbBallVY += fbGravity; // Apply gravity
         
-        // Make the ball look like it's rotating
-        let rotateFrames = floor(globalFrameCount / 3) % 4;
-        stroke(0); strokeWeight(pixelUnit/4); noFill();
-        if (rotateFrames === 0) {
-            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, 0, PI/2);
-            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI, PI*3/2);
-        } else if (rotateFrames === 1) {
-            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI/4, PI*3/4);
-            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*5/4, PI*7/4);
-        } else if (rotateFrames === 2) {
-            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI/2, PI);
-            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*3/2, PI*2);
-        } else {
-            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*3/4, PI*5/4);
-            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*7/4, PI*9/4);
-        }
-        
-        // Check if ball is in the goal area
-        if (fbBallX >= fbGoalX) {
-            // Check if it's a goal
-            if (fbBallY > fbGoalY && fbBallY < fbGoalY + fbGoalHeight) {
-                // Check for goalkeeper save (if ball is close to goalkeeper)
-                if (dist(fbBallX, fbBallY, fbGoalkeeperX, fbGoalkeeperY) < player.size * 1.2) {
-                    // Goalkeeper saved it!
-                    fbPhase = 'result';
-                } else {
-                    // GOAL!
-                    fbScore++;
-                    if (bestScores.FOOTBALL === null || fbScore > bestScores.FOOTBALL) {
-                        bestScores.FOOTBALL = fbScore;
+        // Ball rotation visual effect is already handled by the ball drawing section
+
+        const ballRadius = player.size * 0.3;
+        const goalFrontEdgeY = fbGoalY + fbGoalHeight; // Bottom edge of goal on screen (ball approaches from higher Y)
+        const goalBackEdgeY = fbGoalY;               // Top edge of goal on screen (back of net)
+        const goalLeftEdgeX = fbGoalX;
+        const goalRightEdgeX = fbGoalX + fbGoalWidth;
+
+        // Check for events IF the ball's state is still 'kicked'
+        if (fbPhase === 'kicked') { // Ensure we only process this logic once per outcome
+            // Condition 1: Ball reaches goal's vertical plane (between front and back edges)
+            // Check if the ball's leading edge (fbBallY - ballRadius for upward moving ball) has reached the goal's front plane
+            if (fbBallVY < 0 && (fbBallY - ballRadius) <= goalFrontEdgeY && (fbBallY + ballRadius) >= goalBackEdgeY) {
+                // Ball is vertically within the goal's depth. Now check horizontal position.
+                if ((fbBallX + ballRadius) >= goalLeftEdgeX && (fbBallX - ballRadius) <= goalRightEdgeX) {
+                    // Ball is horizontally aligned with the goal posts.
+                    // Check for goalkeeper save.
+                    // Effective save distance: sum of keeper's effective radius and ball's radius
+                    if (dist(fbBallX, fbBallY, fbGoalkeeperX, fbGoalkeeperY) < (player.size * 0.7 + ballRadius)) { 
+                        fbPhase = 'result'; // Saved
+                        // Optional: Add bounce physics here for visual feedback
+                        // Example: fbBallVY *= -0.5; fbBallVX = (fbBallX - fbGoalkeeperX) * 0.1; 
+                    } else {
+                        // Not saved, and within X/Y bounds of goal = GOAL!
+                        // Consider a goal scored if the center of the ball passes into the goal area.
+                        // For a ball moving upwards (Y decreasing), this means fbBallY is less than goalFrontEdgeY.
+                        if (fbBallY < goalFrontEdgeY ) { // Check if ball center is past the front line
+                           fbScore++;
+                           if (bestScores.FOOTBALL === null || fbScore > bestScores.FOOTBALL) {
+                               bestScores.FOOTBALL = fbScore;
+                           }
+                           fbPhase = 'result'; // Transition to result phase to show score
+                        }
+                        // If it's in the mouth but not fully past line, it continues to fly for this frame.
+                        // It should be caught in the next frame if conditions are still met.
                     }
-                    resetFootball();
-                    fbPhase = 'aiming';
+                } else {
+                    // Ball is at goal depth (Y) but missed wide (X is outside posts).
+                    fbPhase = 'result'; // Missed wide
                 }
-            } else {
-                // Missed the goal
-                fbPhase = 'result';
             }
-        }
-        
-        // Ball went off screen
-        if (fbBallX > width || fbBallY < 0 || fbBallY > height) {
-            fbPhase = 'result';
+            // Condition 2: Ball went clearly over the bar or past the goal's Y-plane without scoring
+            else if (fbBallVY < 0 && (fbBallY + ballRadius) < goalBackEdgeY) { // Ball's bottom edge went above goal's top edge
+                fbPhase = 'result'; // Missed (over the top)
+            }
+            // Condition 3: Ball went off general screen bounds (sides or too far behind player)
+            else if (fbBallX + ballRadius < 0 || fbBallX - ballRadius > width || fbBallY - ballRadius > height) {
+                fbPhase = 'result'; // Off screen
+            }
         }
     }
     
@@ -1060,10 +1094,25 @@ function keyPressed() {
                 discusAngleMeterD.value = discusAngleMeterD.minValue; discusAngleMeterD.increasing = true;
             }
             else if (discusPhase === 'angle') { // This is the throw action
-                let throwAngleRad = radians(discusReleaseAngleD); let throwStrength = discusLockedPower / 6; // Adjusted power scaling
-                discusVX = throwStrength * cos(throwAngleRad); discusVY = -throwStrength * sin(throwAngleRad);
-                let visualArmAngleRad = radians(-discusReleaseAngleD + 90);
-                discusX = discusPlayerX + player.size * 1.2 * cos(visualArmAngleRad); discusY = discusPlayerY + player.size * 1.2 * sin(visualArmAngleRad);
+                let throwAngleRad = radians(discusReleaseAngleD); // Physics angle (0 deg = right, 90 deg = up)
+                let throwStrength = discusLockedPower / 6;
+                discusVX = throwStrength * cos(throwAngleRad);
+                discusVY = -throwStrength * sin(throwAngleRad); // Negative for upward Y in p5
+
+                // Calculate discus starting position to match player's hand based on sprite visuals
+                // Player sprite arm angle is radians(-discusReleaseAngleD)
+                // Arm length (distance from shoulder to hand/discus center) is player.size * 0.48 (derived from armH * 1.2 in drawPlayer8Bit)
+                // Shoulder Y position: discusPlayerY (player's base Y) - player.size/2 (to body center) - bodyH*0.1 (shoulder offset from body center)
+                // bodyH = player.size * 0.45, so bodyH*0.1 = player.size * 0.045
+                // Effective shoulder Y from discusPlayerY = discusPlayerY - player.size * 0.5 - player.size * 0.045 = discusPlayerY - player.size * 0.545
+
+                let armAngleForSprite = radians(-discusReleaseAngleD); // This is the angle the arm is visually drawn at
+                let armLength = player.size * 0.48; 
+                let shoulderYRelativeToPlayerOrigin = player.size * 0.545;
+
+                discusX = discusPlayerX + armLength * cos(armAngleForSprite);
+                discusY = (discusPlayerY - shoulderYRelativeToPlayerOrigin) + armLength * sin(armAngleForSprite);
+                
                 discusPhase = 'flight';
             }
         } else if (currentSport === 'HIGH_JUMP') {
@@ -1122,9 +1171,21 @@ function keyPressed() {
             else if (archPhase === 'result') { resetArchery(); if(window.retryCallback)window.retryCallback(); else archPhase = 'instructions'; }
             else if (archPhase === 'aiming') { archPhase = 'charging'; }
         } else if (currentSport === 'FOOTBALL') {
-            if (fbPhase === 'instructions') { resetFootball(); fbPhase = 'aiming'; }
-            else if (fbPhase === 'result') { resetFootball(); if(window.retryCallback)window.retryCallback(); else fbPhase = 'instructions'; }
-            else if (fbPhase === 'aiming') {
+            console.log(`Football space press: current fbPhase = ${fbPhase}, keyCode = ${keyCode}`); // DEBUG LOG
+            if (fbPhase === 'instructions') {
+                resetFootball();
+                fbPhase = 'aiming';
+                console.log(`Football: phase changed to aiming`); // DEBUG LOG
+            } else if (fbPhase === 'result') {
+                resetFootball();
+                if (window.retryCallback) {
+                    window.retryCallback();
+                    console.log(`Football: retryCallback called`); // DEBUG LOG
+                } else {
+                    fbPhase = 'instructions';
+                    console.log(`Football: phase changed to instructions (from result)`); // DEBUG LOG
+                }
+            } else if (fbPhase === 'aiming') {
                 // Immediate kick without setTimeout to avoid issues
                 fbPhase = 'kicked';
                 // Calculate velocity based on the distance and angle to the target
@@ -1134,7 +1195,7 @@ function keyPressed() {
                 let power = 12; // Fixed power for consistency
                 fbBallVX = cos(angle) * power;
                 fbBallVY = sin(angle) * power;
-                console.log("Football kicked! Velocity:", fbBallVX, fbBallVY);
+                console.log(`Football kicked! Velocity: ${fbBallVX}, ${fbBallVY}. New phase: ${fbPhase}`); // DEBUG LOG
             }
         }
     }
@@ -1220,39 +1281,49 @@ function keyReleased() {
 
 function mousePressed() {
     if (currentSport === 'MENU') {
-        let buttonWidth = min(width*0.7, 400); let buttonHeight = min(height*0.07, 55);
-        let spacing = buttonHeight + pixelUnit*1.5; let totalButtonHeight = SPORTS.length * spacing;
-        let startY = max(height/2 - totalButtonHeight/2 + buttonHeight/2, height/8 + 80) ;
+        let buttonWidth = min(width * 0.7, 400);
+        let buttonHeight = min(height * 0.07, 55);
+        let spacing = buttonHeight + pixelUnit * 1.5;
+        let totalButtonHeight = SPORTS.length * spacing;
+        let startY = max(height / 2 - totalButtonHeight / 2 + buttonHeight / 2, height / 8 + 80);
+
         for (let i = 0; i < SPORTS.length; i++) {
+            let sportNameKey = SPORTS[i];
             let buttonY = startY + i * spacing;
-            let btnLeft = width/2 - buttonWidth/2; let btnRight = width/2 + buttonWidth/2;
-            let btnTop = buttonY - buttonHeight/2; let btnBottom = buttonY + buttonHeight/2;
-            if (mouseX > btnLeft && mouseX < btnRight && mouseY > btnTop && mouseY < btnBottom) {
-                console.log("Selected sport:", SPORTS[i]); // Debug logging
-                currentSport = SPORTS[i]; 
-                console.log("Current sport set to:", currentSport);
-                resetAllSports(); 
-                break; 
-            }
-        }
-    } else if (currentSport === 'SHOOTING') {
-        if (shPhase === 'instructions') { resetShooting(); shStartTime = millis(); shPhase = 'play'; }
-        else if (shPhase === 'play' && shAmmo > 0) {
-            shAmmo--;
-            for (let i = shTargets.length - 1; i >= 0; i--) {
-                let t = shTargets[i];
-                if (t.active && dist(shReticleX, shReticleY, t.x, t.y) < t.size / 2) {
-                    shScore += 10; 
-                    if (dist(shReticleX, shReticleY, t.x, t.y) < t.size*0.15) shScore += 15; 
-                    else if (dist(shReticleX, shReticleY, t.x, t.y) < t.size*0.35) shScore += 5; 
-                    spawnNewTarget(i); break; 
+            if (mouseX > width / 2 - buttonWidth / 2 && mouseX < width / 2 + buttonWidth / 2 &&
+                mouseY > buttonY - buttonHeight / 2 && mouseY < buttonY + buttonHeight / 2) {
+                
+                // Reset sport-specific states and scores before switching
+                if (sportNameKey === "RUNNING") { resetRunning(); currentSport = "RUNNING"; }
+                else if (sportNameKey === "LONG_JUMP") { resetLongJump(); currentSport = "LONG_JUMP"; }
+                else if (sportNameKey === "DISCUS") { resetDiscus(); currentSport = "DISCUS"; }
+                else if (sportNameKey === "HIGH_JUMP") { resetHighJump(); currentSport = "HIGH_JUMP"; }
+                else if (sportNameKey === "SWIMMING") { resetSwimming(); currentSport = "SWIMMING"; }
+                else if (sportNameKey === "SKATING") { resetSkating(); currentSport = "SKATING"; }
+                else if (sportNameKey === "SHOOTING") { resetShooting(); shScore = 0; currentSport = "SHOOTING"; } // Reset shooting score
+                else if (sportNameKey === "ARCHERY") { resetArchery(); archScore = 0; currentSport = "ARCHERY"; } // Reset archery score
+                else if (sportNameKey === "FOOTBALL") { 
+                    resetFootball(); 
+                    fbScore = 0; // Explicitly reset football score for a new session
+                    currentSport = "FOOTBALL"; 
                 }
+                return; // Exit after sport selection
             }
-            if (shAmmo <= 0) { shPhase = 'result'; if (bestScores.SHOOTING === null || shScore > bestScores.SHOOTING) { bestScores.SHOOTING = shScore; } }
         }
+    } else if (currentSport === 'SHOOTING' && shPhase === 'play' && shAmmo > 0) {
+        shAmmo--;
+        for (let i = shTargets.length - 1; i >= 0; i--) {
+            let t = shTargets[i];
+            if (t.active && dist(shReticleX, shReticleY, t.x, t.y) < t.size / 2) {
+                shScore += 10; 
+                if (dist(shReticleX, shReticleY, t.x, t.y) < t.size*0.15) shScore += 15; 
+                else if (dist(shReticleX, shReticleY, t.x, t.y) < t.size*0.35) shScore += 5; 
+                spawnNewTarget(i); break; 
+            }
+        }
+        if (shAmmo <= 0) { shPhase = 'result'; if (bestScores.SHOOTING === null || shScore > bestScores.SHOOTING) { bestScores.SHOOTING = shScore; } }
     }
 }
-
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
     let previousSport = currentSport; resetAllSports(); currentSport = previousSport; 
