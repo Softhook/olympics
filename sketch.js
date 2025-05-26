@@ -1,4 +1,3 @@
-
 let currentSport = 'MENU';
 let score = 0;
 let globalFrameCount = 0;
@@ -6,7 +5,7 @@ let globalFrameCount = 0;
 // --- Best Scores ---
 let bestScores = {
     RUNNING: null, LONG_JUMP: null, DISCUS: null, HIGH_JUMP: null,
-    SWIMMING: null, SKATING: null, SHOOTING: null
+    SWIMMING: null, SKATING: null, SHOOTING: null, ARCHERY: null, FOOTBALL: null
 };
 
 // --- Common Game Variables ---
@@ -23,8 +22,12 @@ let swPlayerY, swSpeed, swStamina, swMaxStamina, swStaminaRegen, swStaminaDrain,
 let skPlayerX, skSpeed, skEffort, skMaxEffort, skEffortRegen, skEffortDrainBoost, skStartTime, skFinishLineX_sk, skFinalTime_sk, skPhase, skIsCharging;
 let shReticleX, shReticleY, shTargets = [], shScore, shAmmo, shTimeLeft, shGameDuration = 30, shStartTime, shPhase;
 const SH_NUM_TARGETS = 5; const SH_TARGET_SIZE = 40;
+// Archery variables
+let archCursorY, archPower, archMaxPower, archWindSpeed, archTargetCenterX, archTargetCenterY, archTargetSize, archArrows, archScore, archPhase, archPowerMeter, archArcherX;
+// Football (penalty) variables  
+let fbCursorX, fbCursorY, fbCursorSpeedX, fbCursorSpeedY, fbGoalWidth, fbGoalHeight, fbGoalX, fbGoalY, fbGoalkeeperX, fbGoalkeeperY, fbBallX, fbBallY, fbBallVX, fbBallVY, fbScore, fbPhase;
 
-const SPORTS = ["RUNNING", "LONG_JUMP", "DISCUS", "HIGH_JUMP", "SWIMMING", "SKATING", "SHOOTING"];
+const SPORTS = ["RUNNING", "LONG_JUMP", "DISCUS", "HIGH_JUMP", "SWIMMING", "SKATING", "SHOOTING", "ARCHERY", "FOOTBALL"];
 
 function setup() {
     createCanvas(windowWidth, windowHeight);
@@ -38,7 +41,7 @@ function setup() {
 
 function resetAllSports() {
     resetRunning(); resetLongJump(); resetDiscus(); resetHighJump();
-    resetSwimming(); resetSkating(); resetShooting();
+    resetSwimming(); resetSkating(); resetShooting(); resetArchery(); resetFootball();
 }
 
 function resetRunning() {
@@ -101,6 +104,31 @@ function resetShooting() {
     shScore = 0; shAmmo = 15; shTimeLeft = shGameDuration;
     shStartTime = 0; shPhase = 'instructions';
 }
+function resetArchery() {
+    archCursorY = height * 0.5; archPower = 0; archMaxPower = 100;
+    archWindSpeed = (Math.random() - 0.5) * 4; // Random wind between -2 and 2
+    archTargetCenterX = width * 0.85; archTargetCenterY = height * 0.5;
+    archTargetSize = player.size * 3; archArrows = 5; archScore = 0;
+    archPhase = 'instructions';
+    archPowerMeter = { value: 0, increasing: true, maxValue: 100, speed: 2.0 };
+    archArcherX = width * 0.2;  // Store archer's X position for consistent use
+}
+
+function resetArrow() {
+    // Reset arrow for a new shot
+    archPower = 0;
+}
+function resetFootball() {
+    fbCursorX = width * 0.5; fbCursorY = height * 0.5;
+    fbCursorSpeedX = 2; fbCursorSpeedY = 1.5;
+    fbGoalWidth = player.size * 10; fbGoalHeight = player.size * 7;
+    fbGoalX = width * 0.5 - fbGoalWidth * 0.5; fbGoalY = height * 0.3;
+    fbGoalkeeperX = fbGoalX + fbGoalWidth * 0.5;
+    fbGoalkeeperY = fbGoalY + fbGoalHeight/2;
+    fbBallX = width * 0.5; fbBallY = height * 0.75;
+    fbBallVX = 0; fbBallVY = 0; fbScore = 0; fbPhase = 'instructions';
+}
+
 function spawnNewTarget(index) {
     shTargets[index] = {
         x: random(width*0.15, width*0.85), y: random(height*0.15, height*0.65),
@@ -124,11 +152,106 @@ function showResult(sportName,resultText,sportResetFunction,sportSpecificInstruc
 // Assume they are correctly copied from the previous step where they were provided in full.)
 function drawStadiumBackground(groundColor1 = color(30, 70, 60), groundColor2 = color(40, 60, 50)) { noStroke(); fill(195, 60, 100); rect(0, 0, width, height * 0.6); fill(120, 30, 40); let skylineHeight = height * 0.04; for (let i = 0; i < width; i += pixelUnit * 5) { let buildingHeightOffset = sin(i * 0.03 / (pixelUnit/6) + globalFrameCount*0.01) * pixelUnit * 1.5; rect(i, height * 0.6 - skylineHeight - buildingHeightOffset - pixelUnit*2, pixelUnit * 5, skylineHeight + buildingHeightOffset + pixelUnit*2); } fill(0, 0, 30); rect(0, height * 0.6 - skylineHeight - pixelUnit * 5.5, width, pixelUnit * 3.5); drawSpectators(0, height * 0.6 - skylineHeight - pixelUnit * 5, width, pixelUnit * 3, 1, floor(width / (pixelUnit * 1.2)), true); let standHeight = height * 0.18; let standY = height * 0.6 - standHeight - skylineHeight - pixelUnit * 5.5; fill(0, 0, 50); rect(0, standY, width, standHeight); stroke(0,0,30); strokeWeight(pixelUnit/3); for(let i=0; i < 3; i++){ line(0, standY + (standHeight/3)*i, width, standY + (standHeight/3)*i); } noStroke(); drawSpectators(0, standY + pixelUnit * 0.5, width, standHeight - pixelUnit, 2, floor(width / (pixelUnit * 1.5))); fill(groundColor1); rect(0, height * 0.6, width, height * 0.4); fill(groundColor2); rect(0, height * 0.6 + pixelUnit * 5, width, height * 0.4 - pixelUnit*5); }
 function drawSpectators(x, y, w, h, numRows, numCols, distant = false) { let specSizeBase = distant ? pixelUnit * 0.5 : pixelUnit * 1.1; let rowHeight = h / numRows; let colWidth = w / numCols; rectMode(CENTER); noStroke(); for (let r = 0; r < numRows; r++) { for (let c = 0; c < numCols; c++) { let baseHue = (c * 13 + r * 23 + (distant?180:0)) % 360; let animatedHue = (baseHue + globalFrameCount * 0.3) % 360; let sat = distant ? 30 : 60 + sin(c*0.5+r*0.3+globalFrameCount*0.02)*10; let brt = distant ? 40 : 70 + cos(c*0.3+r*0.5+globalFrameCount*0.02)*10; fill(animatedHue, sat, brt); let specSize = specSizeBase * (1 + sin(globalFrameCount*0.1 + c*0.2 + r*0.3)*0.08); rect(x + c * colWidth + colWidth / 2, y + r * rowHeight + rowHeight / 2, specSize, specSize * 1.1); } } rectMode(CORNER); }
-function drawPlayer8Bit(px, py, psize, state = "idle", armParam = 0, facingRight = true) { push(); translate(px, py - psize/2); if (!facingRight) { scale(-1, 1); } noStroke(); rectMode(CENTER); let headH = psize*0.35; let headW = psize*0.3; let bodyH = psize*0.45; let bodyW = psize*0.35; let legH = psize*0.5; let legW = psize*0.18; let armH = psize*0.4; let armW = psize*0.15; let skinTone = color(30,40,95); let outfitColor = color((180+globalFrameCount*2)%360, 80,100); let darkOutfitColor = color(hue(outfitColor), saturation(outfitColor)*0.8, brightness(outfitColor)*0.7); let legY = bodyH/2; let legAngle1 = 0, legAngle2 = 0; let armAngle1 = 0, armAngle2 = 0; if (state === "running" || state === "run_lj" || state === "run_hj") { let cycle = sin(globalFrameCount*0.5); legAngle1 = cycle*(PI/4); legAngle2 = -cycle*(PI/4); armAngle1 = -cycle*(PI/5); armAngle2 = cycle*(PI/5); } else if (state === "jumping_power") { legY = bodyH/2 + legH*0.15; legH *= 0.8; bodyH *=0.9; armAngle1 = PI/3.5; armAngle2 = PI/3.5; } else if (state === "jumping_arch") { armAngle1 = -PI/2.5; armAngle2 = -PI/2; legAngle1 = PI/4; legAngle2 = PI/3; bodyH *= 0.8; } fill(darkOutfitColor); push(); translate(-legW*0.75, legY); rotate(legAngle1); rect(0, legH/2, legW, legH); pop(); push(); translate(legW*0.75, legY); rotate(legAngle2); rect(0, legH/2, legW, legH); pop(); fill(outfitColor); rect(0, 0, bodyW, bodyH); if (state === "spin_discus" || state === "discus_throw_angle") { let currentArmAngle = (state === "spin_discus") ? armParam : radians(-discusReleaseAngleD + (facingRight?0:180)); push(); translate(0, -bodyH*0.1); rotate(currentArmAngle); fill(skinTone); rect(armH/1.8, 0, armH*1.2, armW); if(state === "discus_throw_angle" || (state === "spin_discus" && discusCurrentPowerSetting > 0)) { fill(20,80,80); ellipse(armH*1.2, 0, psize*0.25, psize*0.2); } pop(); push(); translate(0, -bodyH*0.1); rotate(PI/5); fill(skinTone); rect(0, armH/2.5, armW*0.9, armH*0.7); pop(); } else { fill(skinTone); push(); translate(-bodyW*0.05, -bodyH*0.2+armH*0.1); rotate(armAngle1); rect(0, armH/2, armW, armH); pop(); push(); translate(bodyW*0.05, -bodyH*0.2+armH*0.1); rotate(armAngle2); rect(0, armH/2, armW, armH); pop(); } fill(skinTone); rect(0, -bodyH/2 - headH/2.2, headW, headH); fill(40,70,30); rect(0, -bodyH/2 - headH/2 - headH*0.15, headW*1.05, headH*0.55); pop(); rectMode(CORNER); }
+function drawPlayer8Bit(px, py, psize, state = "idle", armParam = 0, facingRight = true) { 
+    push(); 
+    translate(px, py - psize/2); 
+    if (!facingRight) { scale(-1, 1); } 
+    noStroke(); 
+    rectMode(CENTER); 
+    let headH = psize*0.35; let headW = psize*0.3; let bodyH = psize*0.45; let bodyW = psize*0.35; let legH = psize*0.5; let legW = psize*0.18; let armH = psize*0.4; let armW = psize*0.15; 
+    let skinTone = color(30,40,95); let outfitColor = color(210, 80,100); let darkOutfitColor = color(hue(outfitColor), saturation(outfitColor)*0.8, brightness(outfitColor)*0.7); 
+    let legY = bodyH/2; let legAngle1 = 0, legAngle2 = 0; let armAngle1 = 0, armAngle2 = 0; 
+    if (state === "running" || state === "run_lj" || state === "run_hj") { 
+        let cycle = sin(globalFrameCount*0.5); legAngle1 = cycle*(PI/4); legAngle2 = -cycle*(PI/4); armAngle1 = -cycle*(PI/5); armAngle2 = cycle*(PI/5); 
+    } else if (state === "jumping_power") { 
+        legY = bodyH/2 + legH*0.15; legH *= 0.8; bodyH *=0.9; armAngle1 = PI/3.5; armAngle2 = PI/3.5; 
+    } else if (state === "jumping_arch") { 
+        armAngle1 = -PI/2.5; armAngle2 = -PI/2; legAngle1 = PI/4; legAngle2 = PI/3; bodyH *= 0.8; 
+    } 
+    fill(darkOutfitColor); 
+    push(); translate(-legW*0.75, legY); rotate(legAngle1); rect(0, legH/2, legW, legH); pop(); 
+    push(); translate(legW*0.75, legY); rotate(legAngle2); rect(0, legH/2, legW, legH); pop(); 
+    fill(outfitColor); rect(0, 0, bodyW, bodyH); 
+    if (state === "spin_discus" || state === "discus_throw_angle") { 
+        let currentArmAngle = (state === "spin_discus") ? armParam : radians(-discusReleaseAngleD + (facingRight?0:180)); 
+        push(); translate(0, -bodyH*0.1); rotate(currentArmAngle); fill(skinTone); rect(armH/1.8, 0, armH*1.2, armW); 
+        if(state === "discus_throw_angle" || (state === "spin_discus" && discusCurrentPowerSetting > 0)) { 
+            fill(20,80,80); ellipse(armH*1.2, 0, psize*0.25, psize*0.2); 
+        } 
+        pop(); 
+        push(); translate(0, -bodyH*0.1); rotate(PI/5); fill(skinTone); rect(0, armH/2.5, armW*0.9, armH*0.7); pop(); 
+    } else { 
+        fill(skinTone); 
+        push(); translate(-bodyW*0.05, -bodyH*0.2+armH*0.1); rotate(armAngle1); rect(0, armH/2, armW, armH); pop(); 
+        push(); translate(bodyW*0.05, -bodyH*0.2+armH*0.1); rotate(armAngle2); rect(0, armH/2, armW, armH); pop(); 
+    } 
+    fill(skinTone); rect(0, -bodyH/2 - headH/2.2, headW, headH); 
+    fill(40,70,30); rect(0, -bodyH/2 - headH/2 - headH*0.15, headW*1.05, headH*0.55); 
+    pop(); // Missing pop() call - this was causing the coordinate system issue!
+    rectMode(CORNER); 
+}
 function drawPoolBackground() { noStroke(); fill(200,80,80); rect(0,0,width,height); let numLanes=5; let laneWidth=width/(numLanes+1); for(let i=0; i<numLanes+2; i++){ fill(190,40,100); if(i===0 || i===numLanes+1){ rect(i*laneWidth-pixelUnit*2,0,pixelUnit*4,height); } else { for(let y=0; y<height; y+=pixelUnit*3){ rect(i*laneWidth-pixelUnit/2,y,pixelUnit,pixelUnit*2); }}} fill(0,0,70); rect(0,height-pixelUnit*6,width,pixelUnit*6); rect(0,0,width,pixelUnit*6); fill(0,0,30); rect(0,0,pixelUnit*12,height); drawSpectators(pixelUnit,pixelUnit*6,pixelUnit*10,height-pixelUnit*12,floor((height-pixelUnit*12)/(pixelUnit*3)),2); fill(0,0,30); rect(width-pixelUnit*12,0,pixelUnit*12,height); drawSpectators(width-pixelUnit*11,pixelUnit*6,pixelUnit*10,height-pixelUnit*12,floor((height-pixelUnit*12)/(pixelUnit*3)),2); }
 function drawIceRinkBackground() { noStroke(); fill(210,10,85); rect(0,0,width,height*0.4); let standHeight=height*0.18; let standY=height*0.4-standHeight; fill(0,0,50); rect(0,standY,width,standHeight); drawSpectators(0,standY+pixelUnit,width,standHeight-pixelUnit*2,2,floor(width/(pixelUnit*2))); fill(180,20,100); rect(0,height*0.4,width,height*0.6); fill(0,0,70); rect(0,height*0.4-pixelUnit*1.5,width,pixelUnit*3); rect(0,height-pixelUnit*1.5,width,pixelUnit*3); }
 function drawShootingRangeBackground() { noStroke(); fill(40,20,50); rect(0,0,width,height); fill(30,30,40); rect(0,height*0.8,width,height*0.2); fill(20,15,30); triangle(0,0,width*0.15,height*0.15,0,height); triangle(width,0,width*0.85,height*0.15,width,height); for(let i=0;i<5;i++){fill(0,0,20);rect(width*0.15+i*width*0.14,height*0.2,pixelUnit*1.5,height*0.55);} }
-function drawMenu() { textSize(constrain(width/15,30,70));fill(0,0,100);textAlign(CENTER,CENTER);text("P5 Power Games Pixel!",width/2,height/8);let buttonWidth=min(width*0.7,400);let buttonHeight=min(height*0.07,55);let spacing=buttonHeight+pixelUnit*1.5;let totalButtonHeight=SPORTS.length*spacing;let startY=max(height/2-totalButtonHeight/2+buttonHeight/2,height/8+80);rectMode(CENTER);noStroke();for(let i=0;i<SPORTS.length;i++){let sportNameKey=SPORTS[i];let sportDisplayName=sportNameKey.replace("_"," ");let buttonY=startY+i*spacing;let buttonHue=(360/SPORTS.length*i)%360;let mouseOver=(mouseX>width/2-buttonWidth/2&&mouseX<width/2+buttonWidth/2&&mouseY>buttonY-buttonHeight/2&&mouseY<buttonY+buttonHeight/2);fill(buttonHue,mouseOver?95:70,mouseOver?100:80);rect(width/2,buttonY,buttonWidth,buttonHeight,pixelUnit);fill(0,0,mouseOver?5:100);textSize(buttonHeight*0.35);text(sportDisplayName,width/2,buttonY-buttonHeight*0.1);let bestScoreDisplay="Best: ---";if(sportNameKey==="RUNNING"&&bestScores.RUNNING!==null)bestScoreDisplay=`Best: ${bestScores.RUNNING.toFixed(2)}s`;else if(sportNameKey==="LONG_JUMP"&&bestScores.LONG_JUMP!==null)bestScoreDisplay=`Best: ${bestScores.LONG_JUMP.toFixed(2)}m`;else if(sportNameKey==="DISCUS"&&bestScores.DISCUS!==null)bestScoreDisplay=`Best: ${bestScores.DISCUS.toFixed(2)}m`;else if(sportNameKey==="HIGH_JUMP"&&bestScores.HIGH_JUMP!==null)bestScoreDisplay=`Best: ${bestScores.HIGH_JUMP}cm`;else if(sportNameKey==="SWIMMING"&&bestScores.SWIMMING!==null)bestScoreDisplay=`Best: ${bestScores.SWIMMING.toFixed(2)}s`;else if(sportNameKey==="SKATING"&&bestScores.SKATING!==null)bestScoreDisplay=`Best: ${bestScores.SKATING.toFixed(2)}s`;else if(sportNameKey==="SHOOTING"&&bestScores.SHOOTING!==null)bestScoreDisplay=`Best: ${bestScores.SHOOTING}pts`;textSize(buttonHeight*0.22);fill(0,0,mouseOver?15:85);text(bestScoreDisplay,width/2,buttonY+buttonHeight*0.23);}rectMode(CORNER);fill(0,0,100);textSize(buttonHeight*0.3);text("Click a sport to start!",width/2,startY+SPORTS.length*spacing+pixelUnit*2);}
+function drawMenu() { 
+    textSize(constrain(width/15,30,70));
+    fill(0,0,100);
+    textAlign(CENTER,CENTER);
+    text("P5 Power Games Pixel!",width/2,height/8);
+    
+    let buttonWidth=min(width*0.7,400);
+    let buttonHeight=min(height*0.07,55);
+    let spacing=buttonHeight+pixelUnit*1.5;
+    let totalButtonHeight=SPORTS.length*spacing;
+    let startY=max(height/2-totalButtonHeight/2+buttonHeight/2,height/8+80);
+    
+    rectMode(CENTER);
+    noStroke();
+    
+    for(let i=0;i<SPORTS.length;i++){
+        let sportNameKey=SPORTS[i];
+        let sportDisplayName=sportNameKey.replace("_"," ");
+        let buttonY=startY+i*spacing;
+        let buttonHue=(360/SPORTS.length*i)%360;
+        let mouseOver=(mouseX>width/2-buttonWidth/2&&mouseX<width/2+buttonWidth/2&&mouseY>buttonY-buttonHeight/2&&mouseY<buttonY+buttonHeight/2);
+        
+        fill(buttonHue,mouseOver?95:70,mouseOver?100:80);
+        rect(width/2,buttonY,buttonWidth,buttonHeight,pixelUnit);
+        
+        fill(0,0,mouseOver?5:100);
+        textSize(buttonHeight*0.35);
+        text(sportDisplayName,width/2,buttonY-buttonHeight*0.1);
+        
+        let bestScoreDisplay="Best: ---";
+        if(sportNameKey==="RUNNING"&&bestScores.RUNNING!==null)
+            bestScoreDisplay=`Best: ${bestScores.RUNNING.toFixed(2)}s`;
+        else if(sportNameKey==="LONG_JUMP"&&bestScores.LONG_JUMP!==null)
+            bestScoreDisplay=`Best: ${bestScores.LONG_JUMP.toFixed(2)}m`;
+        else if(sportNameKey==="DISCUS"&&bestScores.DISCUS!==null)
+            bestScoreDisplay=`Best: ${bestScores.DISCUS.toFixed(2)}m`;
+        else if(sportNameKey==="HIGH_JUMP"&&bestScores.HIGH_JUMP!==null)
+            bestScoreDisplay=`Best: ${bestScores.HIGH_JUMP}cm`;
+        else if(sportNameKey==="SWIMMING"&&bestScores.SWIMMING!==null)
+            bestScoreDisplay=`Best: ${bestScores.SWIMMING.toFixed(2)}s`;
+        else if(sportNameKey==="SKATING"&&bestScores.SKATING!==null)
+            bestScoreDisplay=`Best: ${bestScores.SKATING.toFixed(2)}s`;
+        else if(sportNameKey==="SHOOTING"&&bestScores.SHOOTING!==null)
+            bestScoreDisplay=`Best: ${bestScores.SHOOTING}pts`;
+        else if(sportNameKey==="ARCHERY"&&bestScores.ARCHERY!==null)
+            bestScoreDisplay=`Best: ${bestScores.ARCHERY}pts`;
+        else if(sportNameKey==="FOOTBALL"&&bestScores.FOOTBALL!==null)
+            bestScoreDisplay=`Best: ${bestScores.FOOTBALL} goals`;
+        
+        textSize(buttonHeight*0.22);
+        fill(0,0,mouseOver?15:85);
+        text(bestScoreDisplay,width/2,buttonY+buttonHeight*0.23);
+    }
+    
+    rectMode(CORNER);
+    fill(0,0,100);
+    textSize(buttonHeight*0.3);
+    text("Click a sport to start!",width/2,startY+SPORTS.length*spacing+pixelUnit*2);
+}
 function showInstructions(message,sportResetFunction){fill(20,80,30,0.95);rectMode(CENTER);noStroke();rect(width/2,height/2,min(width*0.8,pixelUnit*100),min(height*0.7,pixelUnit*80),pixelUnit*2);fill(0,0,100);textSize(constrain(pixelUnit*3,14,32));textAlign(CENTER,CENTER);text(message,width/2,height/2-pixelUnit*5,min(width*0.75,pixelUnit*90)-pixelUnit*2,min(height*0.6,pixelUnit*70)-pixelUnit*10);textSize(constrain(pixelUnit*2.5,12,24));text("Press M for Menu",width/2,height/2+min(height*0.7,pixelUnit*80)/2-pixelUnit*7);rectMode(CORNER);}
 function showResult(sportName,resultText,sportResetFunction,sportSpecificInstructionReset){fill(20,80,30,0.95);rectMode(CENTER);noStroke();rect(width/2,height/2,min(width*0.7,pixelUnit*90),min(height*0.5,pixelUnit*70),pixelUnit*2);fill(0,0,100);textSize(constrain(pixelUnit*4.5,20,48));textAlign(CENTER,CENTER);text(`${sportName} Result`,width/2,height/2-min(height*0.5,pixelUnit*70)/2+pixelUnit*10);textSize(constrain(pixelUnit*3.5,16,36));text(resultText,width/2,height/2+pixelUnit*2);textSize(constrain(pixelUnit*2.5,12,24));text("SPACE: Retry\nM: Menu",width/2,height/2+min(height*0.5,pixelUnit*70)/2-pixelUnit*10);rectMode(CORNER);window.retryCallback=sportSpecificInstructionReset;}
 
@@ -142,154 +265,757 @@ function draw() {
         background(50,70,80); // Simple menu background
         drawMenu();
     } else if (currentSport === 'RUNNING') {
+        console.log("Drawing Running sport");
         drawRunning();
     } else if (currentSport === 'LONG_JUMP') {
+        console.log("Drawing Long Jump sport");
         drawLongJump();
     } else if (currentSport === 'DISCUS') {
+        console.log("Drawing Discus sport");
         drawDiscus();
     } else if (currentSport === 'HIGH_JUMP') {
+        console.log("Drawing High Jump sport");
         drawHighJump();
     } else if (currentSport === 'SWIMMING') {
+        console.log("Drawing Swimming sport");
         drawSwimming();
     } else if (currentSport === 'SKATING') {
+        console.log("Drawing Skating sport");
         drawSkating();
     } else if (currentSport === 'SHOOTING') {
+        console.log("Drawing Shooting sport");
         drawShooting();
+    } else if (currentSport === 'ARCHERY') {
+        console.log("Drawing Archery sport");
+        drawArchery();
+    } else if (currentSport === 'FOOTBALL') {
+        console.log("Drawing Football sport");
+        drawFootball();
     }
 }
 
-function drawRunning() { /* ... (Complete logic from previous functional version) ... */ }
-function drawLongJump() { /* ... (Complete logic from previous functional version) ... */ }
-function drawDiscus() { /* ... (Complete logic from previous functional version, ensuring HUD for power/angle) ... */ }
-function drawHighJump() { /* ... (Complete logic from previous functional version, ensuring HUD for power/angle) ... */ }
-function drawSwimming() { /* ... (Complete logic from previous functional version) ... */ }
-function drawSkating() { /* ... (Complete logic from previous functional version) ... */ }
-function drawShooting() { /* ... (Complete logic from previous functional version) ... */ }
-
-// (Pasting the full, restored drawSport functions here)
 function drawRunning() {
-    drawStadiumBackground(color(25,80,70),color(90,60,70));
-    if(runStartTime===0&&!runFinished){showInstructions("RUNNING:\nMash LEFT & RIGHT arrows!\n\nSPACE to start.",resetRunning);return;}
-    if(runFinished){showResult("Running",runFinalTime.toFixed(2)+"s",resetRunning,()=>{runStartTime=0;runFinished=false;});return;}
-    rectMode(CORNER);noStroke();
-    for(let i=0;i<floor((player.size*2)/(pixelUnit*1.5));i++){fill((i%2===0)?color(0,0,100):color(0,0,10));rect(runFinishLineX,(runPlayerY-player.size*1.5)+i*pixelUnit*1.5,pixelUnit*1.5,pixelUnit*1.5);}
-    if(runSpeed>0)runSpeed*=0.995;if(runSpeed<0)runSpeed=0;runPlayerX+=runSpeed;
-    drawPlayer8Bit(runPlayerX,runPlayerY,player.size,runSpeed>0.1?"running":"idle");
-    noStroke();textAlign(CENTER,CENTER);
-    fill(0,0,0,50);rect(5,5,pixelUnit*35,pixelUnit*8,pixelUnit);fill(0,0,100);textSize(pixelUnit*2.5);text(`Speed: ${(runSpeed*10).toFixed(1)}`,5+pixelUnit*17.5,5+pixelUnit*4.5);
-    if(runStartTime>0){fill(0,0,0,50);rect(width-pixelUnit*36,5,pixelUnit*35,pixelUnit*8,pixelUnit);fill(0,0,100);text(`Time: ${((millis()-runStartTime)/1000).toFixed(2)}s`,width-pixelUnit*18.5,5+pixelUnit*4.5);}
-    if(runPlayerX>=runFinishLineX&&!runFinished){runFinished=true;runFinalTime=(millis()-runStartTime)/1000;if(bestScores.RUNNING===null||runFinalTime<bestScores.RUNNING){bestScores.RUNNING=runFinalTime;}}
+    drawStadiumBackground(color(30, 70, 60), color(40, 60, 50));
+    if (!runStartTime || runFinished) {
+        let instructionsText = "RUNNING:\n1. Press SPACE to start\n2. Alternate LEFT/RIGHT arrows quickly";
+        showInstructions(instructionsText, resetRunning);
+        if (runFinished) {
+            showResult("Running", `Time: ${runFinalTime.toFixed(2)}s`, resetRunning, () => {});
+        }
+        return;
+    }
+    
+    // Draw track
+    let trackWidth = width - 100;
+    noStroke();
+    fill(200, 60, 50);
+    rect(50, height * 0.75 - pixelUnit, trackWidth, pixelUnit * 2);
+    
+    // Draw finish line
+    fill(0, 0, 100);
+    for (let i = 0; i < 10; i++) {
+        if (i % 2 === 0) {
+            rect(runFinishLineX, height * 0.75 - pixelUnit + i * pixelUnit/5, pixelUnit/2, pixelUnit/5);
+        }
+    }
+    
+    // Draw player
+    drawPlayer8Bit(runPlayerX, runPlayerY, player.size, "running");
+    
+    // Move player
+    runPlayerX += runSpeed;
+    runSpeed = max(0, runSpeed - 0.05); // Reduced deceleration
+    
+    // Check if finished
+    if (runPlayerX > runFinishLineX && !runFinished) {
+        runFinished = true;
+        runFinalTime = (millis() - runStartTime) / 1000;
+        if (bestScores.RUNNING === null || runFinalTime < bestScores.RUNNING) {
+            bestScores.RUNNING = runFinalTime;
+        }
+    }
 }
+
 function drawLongJump() {
-    drawStadiumBackground(color(25,80,70),color(45,50,50));
-    if(ljPhase==='instructions'){showInstructions("LONG JUMP:\n1. A/D to run.\n2. SPACE for POWER.\n3. SPACE for ANGLE.\n\nSPACE to start.",resetLongJump);return;}
-    if(ljPhase==='result'){showResult("Long Jump",typeof ljDistance==='number'?ljDistance.toFixed(2)+"m":ljDistance,resetLongJump,()=>{ljPhase='instructions';});return;}
-    rectMode(CORNER);noStroke();fill(0,0,100);rect(ljFoulLineX-pixelUnit,ljPlayerY-player.size*1.5,pixelUnit*2,player.size*2);
-    let sandPitX=ljFoulLineX+pixelUnit;fill(40,60,60);rect(sandPitX,ljPlayerY-player.size,width-sandPitX,player.size*1.5);
-    let playerStateLJ=ljPhase==='run'?(ljRunSpeed>0.1?"run_lj":"idle"):(ljPhase==='takeoff_power'||ljPhase==='takeoff_angle'?"jumping_power":(ljPhase==='flight'?"jumping_arch":"idle"));
-    drawPlayer8Bit((ljPhase==='takeoff_power'||ljPhase==='takeoff_angle')?ljTakeoffX:ljPlayerX,ljPlayerY,player.size,playerStateLJ);
-    noStroke();fill(0,0,0,50);rect(width/2-pixelUnit*30,10,pixelUnit*60,pixelUnit*16,pixelUnit);
-    fill(0,0,100);textSize(pixelUnit*2.5);textAlign(CENTER,CENTER);
-    if(ljPhase==='run'){text(`Speed: ${(ljRunSpeed*10).toFixed(1)}`,width/2,10+pixelUnit*4.5);if(ljPlayerX>=ljFoulLineX-player.size*2&&ljPlayerX<=ljFoulLineX+player.size*0.5){fill(0,100,100);text("JUMP!",width/2,10+pixelUnit*11.5);}}
-    else if(ljPhase==='takeoff_power'){text("Set Power! (SPACE)",width/2,10+pixelUnit*4.5);rectMode(CORNER);fill(0,0,30);rect(width/2-pixelUnit*15,10+pixelUnit*8.5,pixelUnit*30,pixelUnit*4);fill(0,100,100);rect(width/2-pixelUnit*15,10+pixelUnit*8.5,map(ljPowerMeter.value,0,ljPowerMeter.maxValue,0,pixelUnit*30),pixelUnit*4);}
-    else if(ljPhase==='takeoff_angle'){text("Set Angle! (SPACE)",width/2,10+pixelUnit*4.5);text(`Angle: ${ljAngleMeterLJ.value.toFixed(0)}°`,width/2,10+pixelUnit*11.5);}
-    if(ljPhase==='run'){if(ljRunSpeed>0)ljRunSpeed*=0.99;ljPlayerX+=ljRunSpeed;if(ljPlayerX>ljFoulLineX+player.size){ljDistance="FOUL (ran past)";ljPhase='result';}}
-    else if(ljPhase==='takeoff_power'){ljPowerMeter.value+=ljPowerMeter.increasing?ljPowerMeter.speed:-ljPowerMeter.speed;if(ljPowerMeter.value>=ljPowerMeter.maxValue||ljPowerMeter.value<=0){ljPowerMeter.increasing=!ljPowerMeter.increasing;}ljPowerMeter.value=constrain(ljPowerMeter.value,0,ljPowerMeter.maxValue);}
-    else if(ljPhase==='takeoff_angle'){ljAngleMeterLJ.value+=ljAngleMeterLJ.increasing?ljAngleMeterLJ.speed:-ljAngleMeterLJ.speed;if(ljAngleMeterLJ.value>=ljAngleMeterLJ.maxValue||ljAngleMeterLJ.value<=ljAngleMeterLJ.minValue){ljAngleMeterLJ.increasing=!ljAngleMeterLJ.increasing;}ljAngleMeterLJ.value=constrain(ljAngleMeterLJ.value,ljAngleMeterLJ.minValue,ljAngleMeterLJ.maxValue);}
-    else if(ljPhase==='flight'){ljPlayerX+=ljJumpVX;ljPlayerY+=ljJumpVY;ljJumpVY+=ljGravityLJ;if(ljPlayerY>=height*0.75){ljPlayerY=height*0.75;ljLandingX=ljPlayerX;if(typeof ljDistance!=='string'){ljDistance=(ljLandingX-ljFoulLineX)/(pixelUnit*3);if(ljDistance<0)ljDistance=0.00;if(bestScores.LONG_JUMP===null||ljDistance>bestScores.LONG_JUMP){bestScores.LONG_JUMP=ljDistance;}}ljPhase='result';}}
+    drawStadiumBackground(color(30, 70, 60), color(40, 60, 50));
+    
+    if (ljPhase === 'instructions') {
+        showInstructions("LONG JUMP:\n1. Press SPACE to start\n2. Alternate LEFT/RIGHT arrows to run\n3. Press SPACE at foul line to jump\n4. Time your power and angle", resetLongJump);
+        return;
+    }
+    
+    if (ljPhase === 'result') {
+        showResult("Long Jump", ljDistance === "FOUL" ? "FOUL!" : `Distance: ${ljDistance.toFixed(2)}m`, resetLongJump, () => {ljPhase = 'instructions';});
+        return;
+    }
+    
+    // Draw track and pit
+    noStroke();
+    fill(200, 60, 50); // Track color
+    rect(50, height * 0.75 - pixelUnit, width - 200, pixelUnit * 2);
+    
+    // Draw foul line
+    stroke(255); strokeWeight(pixelUnit/2);
+    line(ljFoulLineX, height * 0.75 - pixelUnit * 3, ljFoulLineX, height * 0.75 + pixelUnit * 3);
+    
+    // Draw sand pit
+    noStroke();
+    fill(60, 80, 80); // Sand color
+    rect(ljFoulLineX + pixelUnit, height * 0.75 - pixelUnit * 2, width * 0.4, pixelUnit * 4);
+    
+    if (ljPhase === 'run') {
+        drawPlayer8Bit(ljPlayerX, ljPlayerY, player.size, "running");
+        ljPlayerX += ljRunSpeed;
+        ljRunSpeed = max(0, ljRunSpeed - 0.05); // Reduced deceleration
+    } else if (ljPhase === 'takeoff_power') {
+        drawPlayer8Bit(ljTakeoffX, ljPlayerY, player.size, "jumping_power");
+        
+        // Power meter
+        fill(0, 0, 0, 80); rect(width/2 - 100, 30, 200, 20);
+        fill(0, 100, 100); 
+        rect(width/2 - 100, 30, map(ljPowerMeter.value, 0, ljPowerMeter.maxValue, 0, 200), 20);
+        ljPowerMeter.value += ljPowerMeter.increasing ? ljPowerMeter.speed : -ljPowerMeter.speed;
+        if (ljPowerMeter.value >= ljPowerMeter.maxValue || ljPowerMeter.value <= 0) {
+            ljPowerMeter.increasing = !ljPowerMeter.increasing;
+        }
+    } else if (ljPhase === 'takeoff_angle') {
+        drawPlayer8Bit(ljTakeoffX, ljPlayerY, player.size, "jumping_power");
+        
+        // Angle meter
+        fill(0, 0, 0, 80); rect(width/2 - 100, 30, 200, 20);
+        fill(0, 50, 100); 
+        rect(width/2 - 100, 30, map(ljAngleMeterLJ.value, ljAngleMeterLJ.minValue, ljAngleMeterLJ.maxValue, 0, 200), 20);
+        ljAngleMeterLJ.value += ljAngleMeterLJ.increasing ? ljAngleMeterLJ.speed : -ljAngleMeterLJ.speed;
+        if (ljAngleMeterLJ.value >= ljAngleMeterLJ.maxValue || ljAngleMeterLJ.value <= ljAngleMeterLJ.minValue) {
+            ljAngleMeterLJ.increasing = !ljAngleMeterLJ.increasing;
+        }
+    } else if (ljPhase === 'flight') {
+        drawPlayer8Bit(ljPlayerX, ljPlayerY, player.size, "jumping_arch");
+        
+        // Update physics
+        ljPlayerX += ljJumpVX;
+        ljPlayerY += ljJumpVY;
+        ljJumpVY += ljGravityLJ;
+        
+        // Check landing
+        if (ljPlayerY > height * 0.75) {
+            ljLandingX = ljPlayerX;
+            ljDistance = (ljLandingX - ljFoulLineX) / 20; // Scale to meters
+            ljPhase = 'result';
+            if (bestScores.LONG_JUMP === null || ljDistance > bestScores.LONG_JUMP) {
+                bestScores.LONG_JUMP = ljDistance;
+            }
+        }
+    }
 }
+
 function drawDiscus() {
-    drawStadiumBackground(color(90,60,70),color(95,65,75));
-    if(discusPhase==='instructions'){showInstructions("DISCUS:\nHold SPACE: POWER.\nRelease.\nSPACE: ANGLE.\n\nSPACE to start.",resetDiscus);return;}
-    if(discusPhase==='result'){showResult("Discus",typeof discusDistanceD==='number'?discusDistanceD.toFixed(2)+"m":discusDistanceD,resetDiscus,()=>{discusPhase='instructions';});return;}
-    noFill();stroke(0,0,100);strokeWeight(pixelUnit/2);ellipse(discusPlayerX,discusPlayerY+player.size*0.1,player.size*2.5,player.size*1.25);
-    let playerStateDiscus=discusPhase==='spin'?"spin_discus":(discusPhase==='angle'?"discus_throw_angle":"idle");
-    drawPlayer8Bit(discusPlayerX,discusPlayerY,player.size,playerStateDiscus,discusArmAngle);
-    if(discusPhase==='flight'){fill(20,80,80);rectMode(CENTER);ellipse(discusX,discusY,player.size*0.35,player.size*0.2);rectMode(CORNER);}
-    noStroke();fill(0,0,0,50);rect(width/2-pixelUnit*30,10,pixelUnit*60,pixelUnit*16,pixelUnit);
-    fill(0,0,100);textSize(pixelUnit*2.5);textAlign(CENTER,CENTER);
-    if(discusPhase==='spin'){text("Hold SPACE: Power",width/2,10+pixelUnit*4.5);rectMode(CORNER);fill(0,0,30);rect(width/2-pixelUnit*15,10+pixelUnit*8.5,pixelUnit*30,pixelUnit*4);fill(120,100,100);rect(width/2-pixelUnit*15,10+pixelUnit*8.5,map(discusCurrentPowerSetting,0,discusMaxPower,0,pixelUnit*30),pixelUnit*4);}
-    else if(discusPhase==='angle'){text(`Power: ${discusLockedPower.toFixed(0)}`,width/2,10+pixelUnit*4.5);text("SPACE: Set Angle ("+discusReleaseAngleD.toFixed(0)+"°)",width/2,10+pixelUnit*11.5);}
-    if(discusPhase==='spin'){if(keyIsDown(32)){discusCurrentPowerSetting=min(discusMaxPower,discusCurrentPowerSetting+1.2);discusArmAngle+=radians(discusCurrentPowerSetting/7);}}
-    else if(discusPhase==='angle'){discusAngleMeterD.value+=discusAngleMeterD.increasing?discusAngleMeterD.speed:-discusAngleMeterD.speed;if(discusAngleMeterD.value>=discusAngleMeterD.maxValue||discusAngleMeterD.value<=discusAngleMeterD.minValue){discusAngleMeterD.increasing=!discusAngleMeterD.increasing;}discusReleaseAngleD=constrain(discusAngleMeterD.value,discusAngleMeterD.minValue,discusAngleMeterD.maxValue);}
-    else if(discusPhase==='flight'){discusX+=discusVX;discusY+=discusVY;discusVY+=discusGravityD;if(discusY>=discusPlayerY+player.size*0.5||discusX>width+player.size||discusX<-player.size){discusLandingX=discusX;let actualDiscusY=discusPlayerY;discusDistanceD=dist(discusPlayerX,actualDiscusY,discusLandingX,actualDiscusY)/(pixelUnit*2.5);if(discusY<actualDiscusY-player.size*2||abs(atan2(discusY-actualDiscusY,discusX-discusPlayerX))>radians(60))discusDistanceD="FOUL";else if(discusDistanceD<0)discusDistanceD=0.00;if(typeof discusDistanceD==='number'){if(bestScores.DISCUS===null||discusDistanceD>bestScores.DISCUS){bestScores.DISCUS=discusDistanceD;}}discusPhase='result';}}
+    drawStadiumBackground(color(30, 70, 60), color(40, 60, 50));
+    
+    if (discusPhase === 'instructions') {
+        showInstructions("DISCUS:\n1. Press SPACE to start\n2. Press SPACE to set power\n3. Press SPACE to set angle", resetDiscus);
+        return;
+    }
+    
+    if (discusPhase === 'result') {
+        showResult("Discus", `Distance: ${discusDistanceD.toFixed(2)}m`, resetDiscus, () => {discusPhase = 'instructions';});
+        return;
+    }
+    
+    // Draw circle
+    noFill(); stroke(255); strokeWeight(pixelUnit/2);
+    ellipse(discusPlayerX, height * 0.6, player.size * 4, player.size * 4);
+    
+    // Draw player and discus
+    if (discusPhase === 'spin') {
+        discusArmAngle += 0.1;
+        discusCurrentPowerSetting = min(discusMaxPower, discusCurrentPowerSetting + 0.5);
+        drawPlayer8Bit(discusPlayerX, discusPlayerY, player.size, "spin_discus", discusArmAngle);
+        
+        // Power meter
+        fill(0, 0, 0, 80); rect(width/2 - 100, 30, 200, 20);
+        fill(30, 100, 100); 
+        rect(width/2 - 100, 30, map(discusCurrentPowerSetting, 0, discusMaxPower, 0, 200), 20);
+    } else if (discusPhase === 'angle') {
+        drawPlayer8Bit(discusPlayerX, discusPlayerY, player.size, "discus_throw_angle");
+        
+        // Angle meter
+        fill(0, 0, 0, 80); rect(width/2 - 100, 30, 200, 20);
+        fill(200, 80, 100); 
+        rect(width/2 - 100, 30, map(discusAngleMeterD.value, discusAngleMeterD.minValue, discusAngleMeterD.maxValue, 0, 200), 20);
+        discusReleaseAngleD = discusAngleMeterD.value;
+        discusAngleMeterD.value += discusAngleMeterD.increasing ? discusAngleMeterD.speed : -discusAngleMeterD.speed;
+        if (discusAngleMeterD.value >= discusAngleMeterD.maxValue || discusAngleMeterD.value <= discusAngleMeterD.minValue) {
+            discusAngleMeterD.increasing = !discusAngleMeterD.increasing;
+        }
+    } else if (discusPhase === 'flight') {
+        // Draw discus
+        fill(200, 30, 80);
+        ellipse(discusX, discusY, player.size * 0.4, player.size * 0.3);
+        
+        // Update physics
+        discusX += discusVX;
+        discusY += discusVY;
+        discusVY += discusGravityD;
+        
+        // Check landing
+        if (discusY > height * 0.6) {
+            discusLandingX = discusX;
+            discusDistanceD = (discusLandingX - discusPlayerX) / 15; // Scale to meters
+            discusPhase = 'result';
+            if (bestScores.DISCUS === null || discusDistanceD > bestScores.DISCUS) {
+                bestScores.DISCUS = discusDistanceD;
+            }
+        }
+    }
 }
+
 function drawHighJump() {
-    drawStadiumBackground(color(25,80,70),color(220,60,80));
-    let groundLevel=height*0.75;
-    if(hjPhase==='instructions'){showInstructions(`HIGH JUMP:\nBar: ${hjBarHeight}cm. Attempts: ${hjAttemptsLeft}\nMax: ${hjCurrentMaxHeight||'None'}cm\n\nA/D Run. SPACE x3 Power/Angle.\n\nSPACE to start.`,resetHighJump);return;}
-    if(hjPhase==='result'){let resultMessage=`Max Cleared: ${hjCurrentMaxHeight||0}cm`;if(hjAttemptsLeft<=0&&!hjBarCleared&&hjCurrentMaxHeight<hjBarHeight)resultMessage+=`\n(Failed ${hjBarHeight}cm)`;showResult("High Jump",resultMessage,resetHighJump,()=>{hjPhase='instructions';});return;}
-    let barPixelH=hjBarHeight/(pixelUnit*0.8);let barY=groundLevel-barPixelH;
-    let barX=width*0.5;let uprightXOffset=player.size*2.8;
-    rectMode(CORNER);noStroke();fill(0,0,60);
-    rect(barX-uprightXOffset-pixelUnit,groundLevel-max(player.size*5,barPixelH+pixelUnit*3),pixelUnit*2,max(player.size*5,barPixelH+pixelUnit*3)+player.size);
-    rect(barX+uprightXOffset-pixelUnit,groundLevel-max(player.size*5,barPixelH+pixelUnit*3),pixelUnit*2,max(player.size*5,barPixelH+pixelUnit*3)+player.size);
-    fill((globalFrameCount*15)%100<50?color(50,90,100):color(0,90,100));rect(barX-uprightXOffset,barY-pixelUnit*0.75,uprightXOffset*2,pixelUnit*1.5);
-    fill(220,70,70);rect(barX-uprightXOffset*0.8,groundLevel-pixelUnit*0.5,uprightXOffset*1.6+player.size*2,player.size*2+pixelUnit*0.5);
-    let playerStateHJ=hjPhase==='run'?(hjRunSpeed>0.1?"run_hj":"idle"):(hjPhase==='power'||hjPhase==='angle'?"jumping_power":(hjPhase==='flight'?"jumping_arch":"idle"));
-    drawPlayer8Bit((hjPhase==='power'||hjPhase==='angle')?hjTakeoffX:hjPlayerX,hjPlayerY,player.size,playerStateHJ);
-    noStroke();textAlign(CENTER,CENTER);
-    fill(0,0,0,50);rect(width-pixelUnit*44,5,pixelUnit*42,pixelUnit*18,pixelUnit);fill(0,0,100);textSize(pixelUnit*2.2);
-    text(`Bar: ${hjBarHeight}cm`,width-pixelUnit*23,5+pixelUnit*4.5);text(`Attempts: ${hjAttemptsLeft}`,width-pixelUnit*23,5+pixelUnit*9.5);text(`Max Cleared: ${hjCurrentMaxHeight||0}cm`,width-pixelUnit*23,5+pixelUnit*14.5);
-    fill(0,0,0,50);rect(width/2-pixelUnit*30,10,pixelUnit*60,pixelUnit*16,pixelUnit);fill(0,0,100);textSize(pixelUnit*2.5);
-    if(hjPhase==='run'){text(`Speed: ${(hjRunSpeed*10).toFixed(1)}`,width/2,10+pixelUnit*4.5);if(hjPlayerX>=hjTakeoffX-player.size&&hjPlayerX<=hjTakeoffX+player.size*0.5&&hjRunSpeed>0.1){fill(0,100,100);text("JUMP!",width/2,10+pixelUnit*11.5);}}
-    else if(hjPhase==='power'){text("Set Power! (SPACE)",width/2,10+pixelUnit*4.5);rectMode(CORNER);fill(0,0,30);rect(width/2-pixelUnit*15,10+pixelUnit*8.5,pixelUnit*30,pixelUnit*4);fill(300,100,100);rect(width/2-pixelUnit*15,10+pixelUnit*8.5,map(hjPowerMeter.value,0,hjPowerMeter.maxValue,0,pixelUnit*30),pixelUnit*4);}
-    else if(hjPhase==='angle'){text("Set Angle! (SPACE)",width/2,10+pixelUnit*4.5);text(`Angle: ${hjAngleMeterHJ.value.toFixed(0)}°`,width/2,10+pixelUnit*11.5);}
-    if(hjPhase==='run'){if(hjRunSpeed>0)hjRunSpeed*=0.985;hjPlayerX+=hjRunSpeed;if(hjPlayerX>hjTakeoffX+player.size&&hjRunSpeed>0){hjAttemptsLeft--;hjBarCleared=false;if(hjAttemptsLeft<=0){hjPhase='result';}else{hjPlayerX=50+player.size;hjPlayerY=groundLevel;hjRunSpeed=0;hjPhase='run';}}}
-    else if(hjPhase==='power'){hjPowerMeter.value+=hjPowerMeter.increasing?hjPowerMeter.speed:-hjPowerMeter.speed;if(hjPowerMeter.value>=hjPowerMeter.maxValue||hjPowerMeter.value<=0){hjPowerMeter.increasing=!hjPowerMeter.increasing;}hjPowerMeter.value=constrain(hjPowerMeter.value,0,hjPowerMeter.maxValue);}
-    else if(hjPhase==='angle'){hjAngleMeterHJ.value+=hjAngleMeterHJ.increasing?hjAngleMeterHJ.speed:-hjAngleMeterHJ.speed;if(hjAngleMeterHJ.value>=hjAngleMeterHJ.maxValue||hjAngleMeterHJ.value<=hjAngleMeterHJ.minValue){hjAngleMeterHJ.increasing=!hjAngleMeterHJ.increasing;}hjAngleMeterHJ.value=constrain(hjAngleMeterHJ.value,hjAngleMeterHJ.minValue,hjAngleMeterHJ.maxValue);}
-    else if(hjPhase==='flight'){hjPlayerX+=hjJumpVX;hjPlayerY+=hjJumpVY;hjJumpVY+=hjGravityHJ;if(!hjBarCleared&&hjPlayerX>barX-uprightXOffset&&hjPlayerX<barX+uprightXOffset&&hjPlayerY-player.size/2<barY+pixelUnit*0.75&&hjPlayerY+player.size/2>barY-pixelUnit*0.75){if(hjPlayerY>barY-player.size*0.7&&hjPlayerY<barY+player.size*0.3){hjBarCleared=false;hjAttemptsLeft--;if(hjAttemptsLeft<=0){hjPhase='result';}else{hjPlayerX=50+player.size;hjPlayerY=groundLevel;hjRunSpeed=0;hjJumpVX=0;hjJumpVY=0;hjPhase='run';}return;}}if(hjPlayerY>=groundLevel){hjPlayerY=groundLevel;hjBarCleared=false;if(hjPlayerX>barX&&hjPlayerX<barX+uprightXOffset*0.8+player.size*2){let peakPlayerY=groundLevel-(hjJumpVY*hjJumpVY)/(2*hjGravityHJ)-(player.size/2);if(peakPlayerY<barY-pixelUnit*0.75){hjBarCleared=true;}}if(hjBarCleared){hjCurrentMaxHeight=hjBarHeight;if(bestScores.HIGH_JUMP===null||hjCurrentMaxHeight>bestScores.HIGH_JUMP){bestScores.HIGH_JUMP=hjCurrentMaxHeight;}hjPhase='result';}else{hjAttemptsLeft--;if(hjAttemptsLeft<=0){hjPhase='result';}else{hjPlayerX=50+player.size;hjPlayerY=groundLevel;hjRunSpeed=0;hjJumpVX=0;hjJumpVY=0;hjPhase='run';}}}}
+    drawStadiumBackground(color(30, 70, 60), color(40, 60, 50));
+    
+    if (hjPhase === 'instructions') {
+        showInstructions(`HIGH JUMP (${hjBarHeight}cm):\n1. Press SPACE to start\n2. Alternate LEFT/RIGHT arrows to run\n3. Press SPACE at takeoff to jump\n4. Time power and angle`, resetHighJump);
+        return;
+    }
+    
+    if (hjPhase === 'result') {
+        let resultText = hjBarCleared ? 
+            `Cleared ${hjBarHeight}cm!` : 
+            `Failed at ${hjBarHeight}cm\n(${hjAttemptsLeft} attempts left)`;
+        showResult("High Jump", resultText, resetHighJump, () => {hjPhase = 'instructions';});
+        return;
+    }
+    
+    // Draw runway
+    noStroke(); fill(200, 60, 50);
+    rect(50, height * 0.75 - pixelUnit, width * 0.4, pixelUnit * 2);
+    
+    // Draw bar and standards
+    let barY = height * 0.75 - hjBarHeight / 3;
+    stroke(255); strokeWeight(pixelUnit);
+    line(width * 0.5, barY, width * 0.6, barY); // Bar
+    
+    stroke(150, 60, 80); strokeWeight(pixelUnit * 2);
+    line(width * 0.5, barY, width * 0.5, height * 0.75); // Left standard
+    line(width * 0.6, barY, width * 0.6, height * 0.75); // Right standard
+    
+    if (hjPhase === 'run') {
+        drawPlayer8Bit(hjPlayerX, hjPlayerY, player.size, "running");
+        hjPlayerX += hjRunSpeed;
+        hjRunSpeed = max(0, hjRunSpeed - 0.05); // Reduced deceleration
+    } else if (hjPhase === 'power') {
+        drawPlayer8Bit(hjPlayerX, hjPlayerY, player.size, "jumping_power");
+        
+        // Power meter
+        fill(0, 0, 0, 80); rect(width/2 - 100, 30, 200, 20);
+        fill(0, 100, 100); 
+        rect(width/2 - 100, 30, map(hjPowerMeter.value, 0, hjPowerMeter.maxValue, 0, 200), 20);
+        hjPowerMeter.value += hjPowerMeter.increasing ? hjPowerMeter.speed : -hjPowerMeter.speed;
+        if (hjPowerMeter.value >= hjPowerMeter.maxValue || hjPowerMeter.value <= 0) {
+            hjPowerMeter.increasing = !hjPowerMeter.increasing;
+        }
+    } else if (hjPhase === 'angle') {
+        drawPlayer8Bit(hjPlayerX, hjPlayerY, player.size, "jumping_power");
+        
+        // Angle meter
+        fill(0, 0, 0, 80); rect(width/2 - 100, 30, 200, 20);
+        fill(0, 50, 100); 
+        rect(width/2 - 100, 30, map(hjAngleMeterHJ.value, hjAngleMeterHJ.minValue, hjAngleMeterHJ.maxValue, 0, 200), 20);
+        hjAngleMeterHJ.value += hjAngleMeterHJ.increasing ? hjAngleMeterHJ.speed : -hjAngleMeterHJ.speed;
+        if (hjAngleMeterHJ.value >= hjAngleMeterHJ.maxValue || hjAngleMeterHJ.value <= hjAngleMeterHJ.minValue) {
+            hjAngleMeterHJ.increasing = !hjAngleMeterHJ.increasing;
+        }
+    } else if (hjPhase === 'flight') {
+        drawPlayer8Bit(hjPlayerX, hjPlayerY, player.size, "jumping_arch");
+        
+        // Update physics
+        hjPlayerX += hjJumpVX;
+        hjPlayerY += hjJumpVY;
+        hjJumpVY += hjGravityHJ;
+        
+        // Check bar clearance
+        let barCleared = false;
+        if (hjPlayerX > width * 0.5 && hjPlayerX < width * 0.6) {
+            barCleared = hjPlayerY < barY - player.size / 2;
+        }
+        
+        // Check landing
+        if (hjPlayerY > height * 0.75) {
+            hjBarCleared = barCleared;
+            if (hjBarCleared) {
+                hjCurrentMaxHeight = hjBarHeight;
+            } else {
+                hjAttemptsLeft--;
+                if (hjAttemptsLeft <= 0) {
+                    // Failed all attempts
+                }
+            }
+            hjPhase = 'result';
+        }
+    }
 }
+
 function drawSwimming() {
     drawPoolBackground();
-    if (swPhase === 'instructions') {showInstructions("SWIMMING:\nMash W & S to swim.\nWatch stamina!\n\nPress SPACE to start.", resetSwimming);return;}
-    if (swPhase === 'result') {showResult("Swimming", swFinalTime.toFixed(2) + "s", resetSwimming, () => { swPhase = 'instructions';});return;}
-    rectMode(CORNER);noStroke();fill(0,100,100);rect(0, swFinishLineY - pixelUnit/2, width, pixelUnit);
-    if (swStamina <= 0) swSpeed *= 0.9; else swSpeed *= 0.99; if (swSpeed < 0) swSpeed = 0;
-    swPlayerY -= swSpeed; swStamina = min(swMaxStamina, swStamina + swStaminaRegen);
-    push(); translate(width/2, swPlayerY); fill(30,40,95); rect(-player.size*0.1, -player.size*0.4, player.size*0.2, player.size*0.2);
-    fill(color((180 + globalFrameCount * 2) % 360, 80, 100)); rect(-player.size*0.2, -player.size*0.2, player.size*0.4, player.size*0.5);
-    let armCycle = sin(globalFrameCount * (swSpeed > 0.1 ? 0.5 : 0.1)); fill(30,40,85);
-    rect(-player.size*0.2 - player.size*0.07, -player.size*0.2 + armCycle * player.size*0.1, player.size*0.1, player.size*0.3);
-    rect( player.size*0.2 - player.size*0.03, -player.size*0.2 - armCycle * player.size*0.1, player.size*0.1, player.size*0.3); pop();
-    let hudY = height - pixelUnit * 12; textAlign(CENTER,CENTER);
-    fill(0,0,0,50); rect(pixelUnit, hudY, pixelUnit*35, pixelUnit*10, pixelUnit); fill(0,0,100); textSize(pixelUnit*2.5); text(`Speed: ${(swSpeed*10).toFixed(1)}`, pixelUnit*18.5, hudY+pixelUnit*5.5);
-    if (swStartTime > 0) { fill(0,0,0,50); rect(width-pixelUnit*36, hudY, pixelUnit*35, pixelUnit*10, pixelUnit); fill(0,0,100); text(`Time: ${((millis()-swStartTime)/1000).toFixed(2)}s`, width-pixelUnit*18.5, hudY+pixelUnit*5.5); }
-    fill(0,0,0,50); rect(width/2-pixelUnit*20, hudY, pixelUnit*40, pixelUnit*10, pixelUnit); fill(0,0,100); text("Stamina", width/2, hudY+pixelUnit*3);
-    rectMode(CORNER); fill(0,0,30); rect(width/2-pixelUnit*15, hudY+pixelUnit*5, pixelUnit*30, pixelUnit*3); fill(120,100,100); rect(width/2-pixelUnit*15, hudY+pixelUnit*5, map(swStamina,0,swMaxStamina,0,pixelUnit*30), pixelUnit*3);
-    if (swPlayerY <= swFinishLineY && swPhase === 'swim') { swFinalTime = (millis()-swStartTime)/1000; swPhase = 'result'; if (bestScores.SWIMMING === null || swFinalTime < bestScores.SWIMMING) { bestScores.SWIMMING = swFinalTime; } }
+    
+    if (swPhase === 'instructions') {
+        showInstructions("SWIMMING:\n1. Press SPACE to start\n2. Alternate UP/DOWN arrows to swim\n3. Manage stamina", resetSwimming);
+        return;
+    }
+    
+    if (swPhase === 'result') {
+        showResult("Swimming", `Time: ${swFinalTime.toFixed(2)}s`, resetSwimming, () => {swPhase = 'instructions';});
+        return;
+    }
+    
+    // Draw lane dividers (already in pool background)
+    
+    // Draw swimmer
+    let swimState = "idle";
+    if (swSpeed > 0.1) {
+        swimState = "running"; // Reuse running animation for swimming
+    }
+    drawPlayer8Bit(width/2, swPlayerY, player.size, swimState);
+    
+    // Move swimmer
+    swPlayerY -= swSpeed;
+    swSpeed = max(0, swSpeed - 0.03); // Water resistance
+    
+    // Stamina bar
+    fill(0, 0, 0, 80); rect(10, 10, 150, 15);
+    fill(30, 100, 100); 
+    rect(10, 10, map(swStamina, 0, swMaxStamina, 0, 150), 15);
+    
+    // Regenerate stamina
+    swStamina = min(swMaxStamina, swStamina + swStaminaRegen);
+    
+    // Check if finished
+    if (swPlayerY <= swFinishLineY && swPhase === 'swim') {
+        swPhase = 'result';
+        swFinalTime = (millis() - swStartTime) / 1000;
+        if (bestScores.SWIMMING === null || swFinalTime < bestScores.SWIMMING) {
+            bestScores.SWIMMING = swFinalTime;
+        }
+    }
 }
+
 function drawSkating() {
     drawIceRinkBackground();
-    if (skPhase === 'instructions') {showInstructions("SKATING:\nHold SPACE: Charge.\nRelease: Glide.\nTap SPACE: Boost.\n\nSPACE.", resetSkating);return;}
-    if (skPhase === 'result') {showResult("Skating", skFinalTime_sk.toFixed(2) + "s", resetSkating, () => { skPhase = 'instructions';});return;}
-    rectMode(CORNER); noStroke();
-    for(let i = 0; i < floor((height*0.6) / (pixelUnit*3)) ; i++){ fill( (i%2 === 0) ? color(0,0,100) : color(0,0,10) ); rect(skFinishLineX_sk, height*0.4 + i * pixelUnit*3, pixelUnit*1.5, pixelUnit*3); }
-    let playerStateSkate = skPhase === 'charge' || skIsCharging ? "jumping_power" : (skPhase === 'glide' && skSpeed > 0.1 ? "running" : "idle");
-    drawPlayer8Bit(skPlayerX, height*0.7, player.size, playerStateSkate);
-    let hudY = pixelUnit*2; textAlign(CENTER,CENTER);
-    fill(0,0,0,50); rect(pixelUnit, hudY, pixelUnit*35, pixelUnit*10, pixelUnit); fill(0,0,100); textSize(pixelUnit*2.5); text(`Speed: ${(skSpeed*20).toFixed(1)}`, pixelUnit*18.5, hudY+pixelUnit*5.5);
-    if (skStartTime > 0) { fill(0,0,0,50); rect(width-pixelUnit*36, hudY, pixelUnit*35, pixelUnit*10, pixelUnit); fill(0,0,100); text(`Time: ${((millis()-skStartTime)/1000).toFixed(2)}s`, width-pixelUnit*18.5, hudY+pixelUnit*5.5); }
-    fill(0,0,0,50); rect(width/2-pixelUnit*20, hudY, pixelUnit*40, pixelUnit*10, pixelUnit); fill(0,0,100); text(skPhase==='charge'?"Charging...":"Effort", width/2, hudY+pixelUnit*3);
-    rectMode(CORNER); fill(0,0,30); rect(width/2-pixelUnit*15, hudY+pixelUnit*5, pixelUnit*30, pixelUnit*3); fill(200,100,100); rect(width/2-pixelUnit*15, hudY+pixelUnit*5, map(skEffort,0,skMaxEffort,0,pixelUnit*30), pixelUnit*3);
-    if (skPhase === 'charge' && skIsCharging) { skSpeed = min(8, skSpeed + 0.1); } else if (skPhase === 'glide') { skSpeed *= 0.997; skEffort = min(skMaxEffort, skEffort + skEffortRegen); }
-    if (skSpeed < 0.01 && skPhase === 'glide') skSpeed = 0; skPlayerX += skSpeed;
-    if (skPlayerX >= skFinishLineX_sk && (skPhase === 'glide' || skPhase === 'charge')) { skFinalTime_sk = (millis()-skStartTime)/1000; skPhase = 'result'; if (bestScores.SKATING === null || skFinalTime_sk < bestScores.SKATING) { bestScores.SKATING = skFinalTime_sk; } }
+    
+    if (skPhase === 'instructions') {
+        showInstructions("SPEED SKATING:\n1. Press SPACE to start charging\n2. Release SPACE to skate\n3. Press SPACE or RIGHT ARROW for speed boosts\n4. Manage effort", resetSkating);
+        return;
+    }
+    
+    if (skPhase === 'result') {
+        showResult("Speed Skating", `Time: ${skFinalTime_sk.toFixed(2)}s`, resetSkating, () => {skPhase = 'instructions';});
+        return;
+    }
+    
+    // Draw track
+    stroke(0, 0, 70); strokeWeight(pixelUnit);
+    noFill();
+    rect(100, height * 0.5, width - 200, height * 0.3);
+    
+    // Draw skater
+    let skaterState = skIsCharging ? "jumping_power" : "running";
+    drawPlayer8Bit(skPlayerX, height * 0.65, player.size, skaterState);
+    
+    // Move skater
+    skPlayerX += skSpeed;
+    skSpeed = max(0, skSpeed - 0.02); // Friction
+    
+    // Effort bar
+    fill(0, 0, 0, 80); rect(10, 10, 150, 15);
+    fill(210, 80, 100); 
+    rect(10, 10, map(skEffort, 0, skMaxEffort, 0, 150), 15);
+    
+    // Regenerate effort
+    skEffort = min(skMaxEffort, skEffort + skEffortRegen);
+    
+    // Display timer
+    if (skPhase === 'glide' || skPhase === 'charge') {
+        let currentTime = (millis() - skStartTime) / 1000;
+        fill(0, 0, 100); textSize(24);
+        text(`Time: ${currentTime.toFixed(2)}s`, width/2, 30);
+    }
+    
+    // Check if finished
+    if (skPlayerX >= skFinishLineX_sk && (skPhase === 'glide' || skPhase === 'charge')) {
+        skPhase = 'result';
+        skFinalTime_sk = (millis() - skStartTime) / 1000;
+        if (bestScores.SKATING === null || skFinalTime_sk < bestScores.SKATING) {
+            bestScores.SKATING = skFinalTime_sk;
+        }
+    }
 }
+
 function drawShooting() {
     drawShootingRangeBackground();
-    if (shPhase === 'instructions') {showInstructions(`SHOOTING:\nMOUSE Aim, CLICK Shoot.\n${shGameDuration}s, ${shAmmo} bullets.\n\nClick to Start.`, resetShooting);return;}
-    if (shPhase === 'result') {showResult("Shooting", `${shScore}pts`, resetShooting, () => {shPhase = 'instructions';});return;}
-    rectMode(CENTER); noStroke();
-    for (let t of shTargets) { if (t.active) { fill(t.color1); rect(t.x, t.y, t.size, t.size, pixelUnit*0.5); fill(t.color2); rect(t.x, t.y, t.size*0.65, t.size*0.65, pixelUnit*0.3); fill(t.color3); rect(t.x, t.y, t.size*0.25, t.size*0.25, pixelUnit*0.1); } }
-    rectMode(CORNER);
-    shReticleX = mouseX; shReticleY = mouseY; stroke(0,100,100); strokeWeight(pixelUnit/2); noFill(); ellipse(shReticleX, shReticleY, player.size*1.2, player.size*1.2); line(shReticleX-player.size*0.8, shReticleY, shReticleX+player.size*0.8, shReticleY); line(shReticleX, shReticleY-player.size*0.8, shReticleX, shReticleY+player.size*0.8); noStroke();
-    let hudY = pixelUnit*2; textSize(pixelUnit*3); textAlign(CENTER,CENTER);
-    fill(0,0,0,60); rect(pixelUnit, hudY, pixelUnit*25, pixelUnit*6, pixelUnit); fill(0,0,100); text(`Score: ${shScore}`, pixelUnit*13.5, hudY+pixelUnit*3.5);
-    fill(0,0,0,60); rect(width/2-pixelUnit*12, hudY, pixelUnit*24, pixelUnit*6, pixelUnit); fill(0,0,100); text(`Ammo: ${shAmmo}`, width/2, hudY+pixelUnit*3.5);
-    fill(0,0,0,60); rect(width-pixelUnit*26, hudY, pixelUnit*25, pixelUnit*6, pixelUnit); fill(0,0,100); text(`Time: ${shTimeLeft.toFixed(1)}s`, width-pixelUnit*13.5, hudY+pixelUnit*3.5);
-    if (shStartTime > 0 && shPhase === 'play') { shTimeLeft = shGameDuration - (millis()-shStartTime)/1000; if (shTimeLeft <=0) { shTimeLeft = 0; shPhase = 'result'; if (bestScores.SHOOTING === null || shScore > bestScores.SHOOTING) { bestScores.SHOOTING = shScore; } } }
-    if (shAmmo <= 0 && shPhase === 'play') { shPhase = 'result'; if (bestScores.SHOOTING === null || shScore > bestScores.SHOOTING) { bestScores.SHOOTING = shScore; } }
+    
+    if (shPhase === 'instructions') {
+        showInstructions("SHOOTING:\n1. Use ARROW KEYS or mouse to aim\n2. Click or press SPACE to shoot\n3. Score as many points as possible in 30 seconds", resetShooting);
+        return;
+    }
+    
+    if (shPhase === 'result') {
+        showResult("Shooting", `Score: ${shScore} points`, resetShooting, () => {shPhase = 'instructions';});
+        return;
+    }
+    
+    // Calculate time remaining
+    if (shStartTime > 0) {
+        shTimeLeft = shGameDuration - (millis() - shStartTime) / 1000;
+        if (shTimeLeft <= 0) {
+            shTimeLeft = 0;
+            shPhase = 'result';
+            if (bestScores.SHOOTING === null || shScore > bestScores.SHOOTING) {
+                bestScores.SHOOTING = shScore;
+            }
+        }
+    }
+    
+    // Draw targets
+    for (let i = 0; i < shTargets.length; i++) {
+        let t = shTargets[i];
+        if (t.active) {
+            noStroke();
+            fill(t.color1); ellipse(t.x, t.y, t.size, t.size);
+            fill(t.color2); ellipse(t.x, t.y, t.size * 0.7, t.size * 0.7);
+            fill(t.color3); ellipse(t.x, t.y, t.size * 0.3, t.size * 0.3);
+        }
+    }
+    
+    // Draw reticle
+    stroke(255, 0, 0); strokeWeight(pixelUnit/2); noFill();
+    ellipse(shReticleX, shReticleY, pixelUnit * 3, pixelUnit * 3);
+    line(shReticleX - pixelUnit * 5, shReticleY, shReticleX - pixelUnit * 1.5, shReticleY);
+    line(shReticleX + pixelUnit * 1.5, shReticleY, shReticleX + pixelUnit * 5, shReticleY);
+    line(shReticleX, shReticleY - pixelUnit * 5, shReticleX, shReticleY - pixelUnit * 1.5);
+    line(shReticleX, shReticleY + pixelUnit * 1.5, shReticleX, shReticleY + pixelUnit * 5);
+    
+    // Update reticle position - Use both mouse and arrow keys
+    // The game still responds to mouse movements as original, but also supports arrow keys
+    if (keyIsDown(LEFT_ARROW)) { shReticleX -= 5; }
+    if (keyIsDown(RIGHT_ARROW)) { shReticleX += 5; }
+    if (keyIsDown(UP_ARROW)) { shReticleY -= 5; }
+    if (keyIsDown(DOWN_ARROW)) { shReticleY += 5; }
+    
+    // If mouse moved, use mouse position (overrides arrow keys)
+    if (abs(mouseX - pmouseX) > 0 || abs(mouseY - pmouseY) > 0) {
+        shReticleX = mouseX;
+        shReticleY = mouseY;
+    }
+    
+    // Keep reticle on screen
+    shReticleX = constrain(shReticleX, 0, width);
+    shReticleY = constrain(shReticleY, 0, height);
+    
+    // Draw HUD
+    fill(0, 0, 0, 80); rect(10, 10, 300, 30);
+    fill(0, 0, 100); textSize(pixelUnit * 2);
+    text(`Score: ${shScore} | Ammo: ${shAmmo} | Time: ${shTimeLeft.toFixed(1)}s`, 160, 25);
+}
+function drawArchery() {
+    drawStadiumBackground(color(140, 70, 60), color(120, 40, 50));
+    if (archPhase === 'instructions') {
+        showInstructions("ARCHERY:\n1. UP/DOWN to aim\n2. Hold SPACE to power\n3. Release to shoot\n\nSPACE to start.", resetArchery);
+        return;
+    }
+    if (archPhase === 'result') {
+        showResult("Archery", `${archScore} points\n${archArrows} arrows left`, resetArchery, () => {archPhase = 'instructions';});
+        return;
+    }
+    
+    // Draw target
+    noStroke();
+    fill(0, 0, 0); ellipse(archTargetCenterX, archTargetCenterY, archTargetSize * 1.05, archTargetSize * 1.05);
+    fill(0, 0, 100); ellipse(archTargetCenterX, archTargetCenterY, archTargetSize, archTargetSize);
+    fill(0, 100, 100); ellipse(archTargetCenterX, archTargetCenterY, archTargetSize * 0.8, archTargetSize * 0.8);
+    fill(0, 0, 100); ellipse(archTargetCenterX, archTargetCenterY, archTargetSize * 0.6, archTargetSize * 0.6);
+    fill(0, 100, 100); ellipse(archTargetCenterX, archTargetCenterY, archTargetSize * 0.4, archTargetSize * 0.4);
+    fill(0, 0, 100); ellipse(archTargetCenterX, archTargetCenterY, archTargetSize * 0.2, archTargetSize * 0.2);
+    
+    // Draw archer and bow
+    const archerX = archArcherX;
+    drawPlayer8Bit(archerX, archCursorY, player.size, "idle");
+    
+    // Draw bow and arrow
+    stroke(120, 50, 40); strokeWeight(pixelUnit * 0.5);
+    noFill();
+    let bowCurve = map(archPower, 0, archMaxPower, 0, pixelUnit * 2);
+    beginShape();
+    vertex(archerX + player.size * 0.5, archCursorY - player.size * 0.4);
+    bezierVertex(
+        archerX + player.size * 0.5 + bowCurve, archCursorY - player.size * 0.2,
+        archerX + player.size * 0.5 + bowCurve, archCursorY + player.size * 0.2, 
+        archerX + player.size * 0.5, archCursorY + player.size * 0.4
+    );
+    endShape();
+    stroke(0); strokeWeight(pixelUnit * 0.3);
+    line(archerX + player.size * 0.5, archCursorY - player.size * 0.4, 
+         archerX + player.size * 0.5, archCursorY + player.size * 0.4);
+    
+    if (archPower > 0) {
+        // Draw arrow
+        stroke(200, 30, 80); strokeWeight(pixelUnit * 0.3);
+        line(archerX + player.size * 0.5, archCursorY, 
+             archerX + player.size * 0.5 - map(archPower, 0, archMaxPower, 0, player.size), archCursorY);
+        // Arrow head
+        fill(200, 30, 80); noStroke();
+        triangle(
+            archerX + player.size * 0.5 - map(archPower, 0, archMaxPower, 0, player.size), archCursorY - pixelUnit * 0.5,
+            archerX + player.size * 0.5 - map(archPower, 0, archMaxPower, 0, player.size) - pixelUnit, archCursorY,
+            archerX + player.size * 0.5 - map(archPower, 0, archMaxPower, 0, player.size), archCursorY + pixelUnit * 0.5
+        );
+    }
+    
+    // Wind indicator
+    noStroke();
+    fill(0, 0, 0, 50); rect(pixelUnit, pixelUnit * 2, pixelUnit * 40, pixelUnit * 6, pixelUnit);
+    fill(0, 0, 100); textSize(pixelUnit * 2.2); 
+    text(`Wind: ${archWindSpeed > 0 ? "→" : "←"} ${abs(archWindSpeed).toFixed(1)}`, pixelUnit * 20, pixelUnit * 5);
+    
+    // Arrows & score
+    fill(0, 0, 0, 50); rect(width - pixelUnit * 36, pixelUnit * 2, pixelUnit * 35, pixelUnit * 6, pixelUnit);
+    fill(0, 0, 100);
+    text(`Arrows: ${archArrows} | Score: ${archScore}`, width - pixelUnit * 18.5, pixelUnit * 5);
+    
+    // Power meter if charging
+    if (archPhase === 'charging') {
+        fill(0, 0, 0, 50); rect(width/2 - pixelUnit * 30, 10, pixelUnit * 60, pixelUnit * 16, pixelUnit);
+        fill(0, 0, 100); textSize(pixelUnit * 2.5);
+        text("Power", width/2, 10 + pixelUnit * 4.5);
+        
+        rectMode(CORNER); fill(0, 0, 30);
+        rect(width/2 - pixelUnit * 15, 10 + pixelUnit * 8.5, pixelUnit * 30, pixelUnit * 4);
+        fill(30, 100, 100);
+        rect(width/2 - pixelUnit * 15, 10 + pixelUnit * 8.5, map(archPower, 0, archMaxPower, 0, pixelUnit * 30), pixelUnit * 4);
+        
+        if (keyIsDown(32)) { // SPACE key
+            archPower = min(archMaxPower, archPower + 1.5);
+        }
+    }
+    
+    // Handle arrow flight
+    if (archPhase === 'flight') {
+        // Draw the flying arrow
+        let arrowX = archPowerMeter.value;
+        let arrowY = archCursorY + archWindSpeed * arrowX / 40;
+        
+        push();
+        translate(arrowX, arrowY);
+        rotate(atan2(archWindSpeed, 40)); // Angle the arrow based on wind
+        
+        // Draw arrow shaft
+        stroke(200, 30, 80); strokeWeight(pixelUnit * 0.3);
+        line(0, 0, -player.size, 0);
+        
+        // Arrow head
+        fill(200, 30, 80); noStroke();
+        triangle(0, -pixelUnit * 0.5, pixelUnit, 0, 0, pixelUnit * 0.5);
+        
+        // Arrow fletchings
+        fill(0, 0, 70);
+        triangle(-player.size + pixelUnit, -pixelUnit * 0.8, -player.size + pixelUnit * 0.5, 0, -player.size + pixelUnit, pixelUnit * 0.8);
+        pop();
+        
+        // Move the arrow
+        archPowerMeter.value += 8;
+        
+        // Check if arrow hit the target
+        if (arrowX >= archTargetCenterX) {
+            // Calculate distance from center
+            let distFromCenter = dist(archTargetCenterX, archTargetCenterY, arrowX, arrowY);
+            
+            // Scoring based on distance from center
+            if (distFromCenter < archTargetSize * 0.1) {
+                archScore += 10; // Bullseye
+            } else if (distFromCenter < archTargetSize * 0.2) {
+                archScore += 9;
+            } else if (distFromCenter < archTargetSize * 0.3) {
+                archScore += 7;
+            } else if (distFromCenter < archTargetSize * 0.4) {
+                archScore += 5;
+            } else if (distFromCenter < archTargetSize * 0.5) {
+                archScore += 3;
+            } else if (distFromCenter < archTargetSize * 0.55) {
+                archScore += 1;
+            }
+            
+            archArrows--;
+            if (archArrows <= 0) {
+                archPhase = 'result';
+                if (bestScores.ARCHERY === null || archScore > bestScores.ARCHERY) {
+                    bestScores.ARCHERY = archScore;
+                }
+            } else {
+                archPhase = 'aiming';
+                archPower = 0;
+            }
+        }
+        
+        // If arrow missed the target completely
+        if (arrowX > width + player.size || arrowY < 0 || arrowY > height) {
+            archArrows--;
+            if (archArrows <= 0) {
+                archPhase = 'result';
+                if (bestScores.ARCHERY === null || archScore > bestScores.ARCHERY) {
+                    bestScores.ARCHERY = archScore;
+                }
+            } else {
+                archPhase = 'aiming';
+                archPower = 0;
+            }
+        }
+    }
+}
+function drawFootball() {
+    drawStadiumBackground(color(110, 80, 60), color(0, 70, 30));
+    if (fbPhase === 'instructions') {
+        showInstructions("FOOTBALL PENALTY:\n1. Use ARROW KEYS to aim at target\n2. Press SPACE to kick\n3. Score goals past the goalkeeper\n\nSPACE to start.", resetFootball);
+        return;
+    }
+    if (fbPhase === 'result') {
+        showResult("Football", `${fbScore} goals`, resetFootball, () => {fbPhase = 'instructions';});
+        return;
+    }
+    
+    // Draw goal
+    noFill(); stroke(0, 0, 100); strokeWeight(pixelUnit);
+    rect(fbGoalX, fbGoalY, fbGoalWidth, fbGoalHeight);
+    // Goal net
+    stroke(0, 0, 100); strokeWeight(pixelUnit/3);
+    for(let x = 0; x <= fbGoalWidth; x += pixelUnit * 1.5) {
+        line(fbGoalX + x, fbGoalY, fbGoalX + x, fbGoalY + fbGoalHeight);
+    }
+    for(let y = 0; y <= fbGoalHeight; y += pixelUnit * 1.5) {
+        line(fbGoalX, fbGoalY + y, fbGoalX + fbGoalWidth, fbGoalY + y);
+    }
+    
+    // Draw goalkeeper
+    fbGoalkeeperY = fbGoalY + fbGoalHeight/2;
+    if (fbPhase === 'aiming') {
+        // Goalkeeper moves slightly based on cursor position
+        fbGoalkeeperY = map(
+            fbCursorY, 
+            fbGoalY, fbGoalY + fbGoalHeight,
+            fbGoalY + fbGoalHeight * 0.2, fbGoalY + fbGoalHeight * 0.8,
+            true
+        );
+    } else if (fbPhase === 'kicked') {
+        // Goalkeeper tries to save
+        fbGoalkeeperY = map(
+            fbBallY,
+            fbGoalY, fbGoalY + fbGoalHeight,
+            fbGoalY + pixelUnit * 2, fbGoalY + fbGoalHeight - pixelUnit * 2,
+            true
+        );
+    }
+    
+    drawPlayer8Bit(fbGoalkeeperX, fbGoalkeeperY, player.size, "jumping_power", 0, false);
+    
+    // Draw player
+    if (fbPhase === 'aiming' || fbPhase === 'ready') {
+        drawPlayer8Bit(fbBallX - player.size * 0.8, fbBallY, player.size, fbPhase === 'ready' ? "jumping_power" : "idle");
+    }
+    
+    // Draw ball
+    noStroke(); fill(0, 0, 100);
+    ellipse(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6);
+    
+    if (fbPhase === 'aiming') {
+        // Allow manual control with arrow keys
+        if (keyIsDown(LEFT_ARROW)) {
+            fbCursorX -= 3;
+        } else if (keyIsDown(RIGHT_ARROW)) {
+            fbCursorX += 3;
+        }
+        
+        if (keyIsDown(UP_ARROW)) {
+            fbCursorY -= 3;
+        } else if (keyIsDown(DOWN_ARROW)) {
+            fbCursorY += 3;
+        }
+        
+        // If no keys are pressed, use automatic movement
+        if (!keyIsDown(LEFT_ARROW) && !keyIsDown(RIGHT_ARROW) && !keyIsDown(UP_ARROW) && !keyIsDown(DOWN_ARROW)) {
+            fbCursorX += fbCursorSpeedX;
+            fbCursorY += fbCursorSpeedY;
+        }
+        
+        // Bounce cursor at boundaries
+        if (fbCursorX < fbGoalX || fbCursorX > fbGoalX + fbGoalWidth) {
+            fbCursorSpeedX *= -1;
+            fbCursorX = constrain(fbCursorX, fbGoalX, fbGoalX + fbGoalWidth);
+        }
+        
+        if (fbCursorY < fbGoalY || fbCursorY > fbGoalY + fbGoalHeight) {
+            fbCursorSpeedY *= -1;
+            fbCursorY = constrain(fbCursorY, fbGoalY, fbGoalY + fbGoalHeight);
+        }
+        
+        // Draw cursor
+        stroke(0, 100, 100); noFill(); strokeWeight(pixelUnit/2);
+        ellipse(fbCursorX, fbCursorY, player.size * 0.7, player.size * 0.7);
+        line(fbCursorX - player.size * 0.5, fbCursorY, fbCursorX + player.size * 0.5, fbCursorY);
+        line(fbCursorX, fbCursorY - player.size * 0.5, fbCursorX, fbCursorY + player.size * 0.5);
+    } else if (fbPhase === 'kicked') {
+        // Move the ball
+        fbBallX += fbBallVX;
+        fbBallY += fbBallVY;
+        
+        // Make the ball look like it's rotating
+        let rotateFrames = floor(globalFrameCount / 3) % 4;
+        stroke(0); strokeWeight(pixelUnit/4); noFill();
+        if (rotateFrames === 0) {
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, 0, PI/2);
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI, PI*3/2);
+        } else if (rotateFrames === 1) {
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI/4, PI*3/4);
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*5/4, PI*7/4);
+        } else if (rotateFrames === 2) {
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI/2, PI);
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*3/2, PI*2);
+        } else {
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*3/4, PI*5/4);
+            arc(fbBallX, fbBallY, player.size * 0.6, player.size * 0.6, PI*7/4, PI*9/4);
+        }
+        
+        // Check if ball is in the goal area
+        if (fbBallX >= fbGoalX) {
+            // Check if it's a goal
+            if (fbBallY > fbGoalY && fbBallY < fbGoalY + fbGoalHeight) {
+                // Check for goalkeeper save (if ball is close to goalkeeper)
+                if (dist(fbBallX, fbBallY, fbGoalkeeperX, fbGoalkeeperY) < player.size * 1.2) {
+                    // Goalkeeper saved it!
+                    fbPhase = 'result';
+                } else {
+                    // GOAL!
+                    fbScore++;
+                    if (bestScores.FOOTBALL === null || fbScore > bestScores.FOOTBALL) {
+                        bestScores.FOOTBALL = fbScore;
+                    }
+                    resetFootball();
+                    fbPhase = 'aiming';
+                }
+            } else {
+                // Missed the goal
+                fbPhase = 'result';
+            }
+        }
+        
+        // Ball went off screen
+        if (fbBallX > width || fbBallY < 0 || fbBallY > height) {
+            fbPhase = 'result';
+        }
+    }
+    
+    // Score display
+    noStroke(); fill(0, 0, 0, 50);
+    rect(width/2 - pixelUnit * 20, pixelUnit * 2, pixelUnit * 40, pixelUnit * 6, pixelUnit);
+    fill(0, 0, 100); textSize(pixelUnit * 2.5);
+    text(`Score: ${fbScore} Goals`, width/2, pixelUnit * 5);
 }
 
 
@@ -302,7 +1028,9 @@ function keyPressed() {
                   (currentSport === 'HIGH_JUMP' && (hjPhase === 'instructions' || hjPhase === 'result')) ||
                   (currentSport === 'SWIMMING' && (swPhase === 'instructions' || swPhase === 'result')) ||
                   (currentSport === 'SKATING' && (skPhase === 'instructions' || skPhase === 'result')) ||
-                  (currentSport === 'SHOOTING' && (shPhase === 'instructions' || shPhase === 'result'))
+                  (currentSport === 'SHOOTING' && (shPhase === 'instructions' || shPhase === 'result')) ||
+                  (currentSport === 'ARCHERY' && (archPhase === 'instructions' || archPhase === 'result')) ||
+                  (currentSport === 'FOOTBALL' && (fbPhase === 'instructions' || fbPhase === 'result'))
                 ) { resetAllSports(); currentSport = 'MENU'; }
         } return;
     }
@@ -326,6 +1054,11 @@ function keyPressed() {
         } else if (currentSport === 'DISCUS') {
             if (discusPhase === 'instructions') { resetDiscus(); discusPhase = 'spin'; discusCurrentPowerSetting = 0; discusArmAngle = 0; }
             else if (discusPhase === 'result') { resetDiscus(); if(window.retryCallback) window.retryCallback(); else discusPhase = 'instructions'; }
+            else if (discusPhase === 'spin') { // Set power when space is pressed
+                discusLockedPower = discusCurrentPowerSetting;
+                discusPhase = 'angle';
+                discusAngleMeterD.value = discusAngleMeterD.minValue; discusAngleMeterD.increasing = true;
+            }
             else if (discusPhase === 'angle') { // This is the throw action
                 let throwAngleRad = radians(discusReleaseAngleD); let throwStrength = discusLockedPower / 6; // Adjusted power scaling
                 discusVX = throwStrength * cos(throwAngleRad); discusVY = -throwStrength * sin(throwAngleRad);
@@ -357,43 +1090,131 @@ function keyPressed() {
             if (skPhase === 'instructions') { resetSkating(); skIsCharging = true; skPhase = 'charge'; skStartTime = millis(); }
             else if (skPhase === 'result') { resetSkating(); if(window.retryCallback)window.retryCallback(); else skPhase = 'instructions'; }
             else if (skPhase === 'glide' && skEffort >= skEffortDrainBoost) { skSpeed += 1; skEffort -= skEffortDrainBoost; }
-        } else if (currentSport === 'SHOOTING' && shPhase === 'result') {
-            resetShooting(); if(window.retryCallback)window.retryCallback(); else shPhase = 'instructions';
+        } else if (currentSport === 'SHOOTING') {
+            if (shPhase === 'instructions') { 
+                resetShooting(); shStartTime = millis(); shPhase = 'play'; 
+            }
+            else if (shPhase === 'play' && shAmmo > 0) {
+                // Shoot when space is pressed, implementing same functionality as mousePressed
+                shAmmo--;
+                for (let i = shTargets.length - 1; i >= 0; i--) {
+                    let t = shTargets[i];
+                    if (t.active && dist(shReticleX, shReticleY, t.x, t.y) < t.size / 2) {
+                        shScore += 10; 
+                        if (dist(shReticleX, shReticleY, t.x, t.y) < t.size*0.15) shScore += 15; 
+                        else if (dist(shReticleX, shReticleY, t.x, t.y) < t.size*0.35) shScore += 5; 
+                        spawnNewTarget(i); 
+                        break; 
+                    }
+                }
+                if (shAmmo <= 0) { 
+                    shPhase = 'result'; 
+                    if (bestScores.SHOOTING === null || shScore > bestScores.SHOOTING) { 
+                        bestScores.SHOOTING = shScore; 
+                    } 
+                }
+            }
+            else if (shPhase === 'result') {
+                resetShooting(); if(window.retryCallback)window.retryCallback(); else shPhase = 'instructions';
+            }
+        } else if (currentSport === 'ARCHERY') {
+            if (archPhase === 'instructions') { resetArchery(); archPhase = 'aiming'; }
+            else if (archPhase === 'result') { resetArchery(); if(window.retryCallback)window.retryCallback(); else archPhase = 'instructions'; }
+            else if (archPhase === 'aiming') { archPhase = 'charging'; }
+        } else if (currentSport === 'FOOTBALL') {
+            if (fbPhase === 'instructions') { resetFootball(); fbPhase = 'aiming'; }
+            else if (fbPhase === 'result') { resetFootball(); if(window.retryCallback)window.retryCallback(); else fbPhase = 'instructions'; }
+            else if (fbPhase === 'aiming') {
+                // Immediate kick without setTimeout to avoid issues
+                fbPhase = 'kicked';
+                // Calculate velocity based on the distance and angle to the target
+                let dx = fbCursorX - fbBallX;
+                let dy = fbCursorY - fbBallY;
+                let angle = atan2(dy, dx);
+                let power = 12; // Fixed power for consistency
+                fbBallVX = cos(angle) * power;
+                fbBallVY = sin(angle) * power;
+                console.log("Football kicked! Velocity:", fbBallVX, fbBallVY);
+            }
         }
     }
     // Mashing keys
     if (currentSport === 'RUNNING' && !runFinished && runStartTime > 0) {
-        if (keyCode === LEFT_ARROW && runKeyAlternator !== 1) { runSpeed += 0.3; runKeyAlternator = 1; }
-        else if (keyCode === RIGHT_ARROW && runKeyAlternator !== 2) { runSpeed += 0.3; runKeyAlternator = 2; }
-        if (runSpeed > 6) runSpeed = 6;
+        if (keyCode === LEFT_ARROW && runKeyAlternator !== 1) { runSpeed += 0.8; runKeyAlternator = 1; }
+        else if (keyCode === RIGHT_ARROW && runKeyAlternator !== 2) { runSpeed += 0.8; runKeyAlternator = 2; }
+        if (runSpeed > 10) runSpeed = 10; // Higher max speed
     }
     if ((currentSport === 'LONG_JUMP' && ljPhase === 'run') || (currentSport === 'HIGH_JUMP' && hjPhase === 'run')) {
         let currentSpeed = (currentSport === 'LONG_JUMP') ? ljRunSpeed : hjRunSpeed;
         let currentAlternator = (currentSport === 'LONG_JUMP') ? ljKeyAlternator : hjKeyAlternator;
-        let increment = 0.4; let maxSpeed = 7;
-        if ((key === 'a' || key === 'A') && currentAlternator !== 1) { currentSpeed += increment; if (currentSport === 'LONG_JUMP') ljKeyAlternator = 1; else hjKeyAlternator = 1; }
-        else if ((key === 'd' || key === 'D') && currentAlternator !== 2) { currentSpeed += increment; if (currentSport === 'LONG_JUMP') ljKeyAlternator = 2; else hjKeyAlternator = 2; }
+        let increment = 0.8; let maxSpeed = 12; // Increased speed and max speed
+        // Use LEFT/RIGHT arrows for running (also keep A/D as alternative)
+        if ((keyCode === LEFT_ARROW || key === 'a' || key === 'A') && currentAlternator !== 1) { 
+            currentSpeed += increment; 
+            if (currentSport === 'LONG_JUMP') ljKeyAlternator = 1; else hjKeyAlternator = 1; 
+        }
+        else if ((keyCode === RIGHT_ARROW || key === 'd' || key === 'D') && currentAlternator !== 2) { 
+            currentSpeed += increment; 
+            if (currentSport === 'LONG_JUMP') ljKeyAlternator = 2; else hjKeyAlternator = 2; 
+        }
         if (currentSpeed > maxSpeed) currentSpeed = maxSpeed;
         if (currentSport === 'LONG_JUMP') ljRunSpeed = currentSpeed; else hjRunSpeed = currentSpeed;
     }
     if (currentSport === 'SWIMMING' && swPhase === 'swim' && swStamina > 0) {
-        if ((key === 'w' || key === 'W') && swKeyAlternator !== 1) { swSpeed += 0.25; swStamina -= swStaminaDrain; swKeyAlternator = 1; }
-        else if ((key === 's' || key === 'S') && swKeyAlternator !== 2) { swSpeed += 0.25; swStamina -= swStaminaDrain; swKeyAlternator = 2; }
+        // Use UP/DOWN arrows for swimming (also keep W/S as alternative)
+        if ((keyCode === UP_ARROW || key === 'w' || key === 'W') && swKeyAlternator !== 1) { 
+            swSpeed += 0.25; 
+            swStamina -= swStaminaDrain; 
+            swKeyAlternator = 1; 
+        }
+        else if ((keyCode === DOWN_ARROW || key === 's' || key === 'S') && swKeyAlternator !== 2) { 
+            swSpeed += 0.25; 
+            swStamina -= swStaminaDrain; 
+            swKeyAlternator = 2; 
+        }
         if (swSpeed > 3.5) swSpeed = 3.5; if (swStamina < 0) swStamina = 0;
     }
+    // Handle Archery aiming
+    if (currentSport === 'ARCHERY' && archPhase === 'aiming') {
+        if (keyCode === UP_ARROW) { archCursorY -= pixelUnit * 2; }
+        else if (keyCode === DOWN_ARROW) { archCursorY += pixelUnit * 2; }
+        // Keep cursor within bounds
+        archCursorY = constrain(archCursorY, player.size, height - player.size);
+    }
 }
-
 function keyReleased() {
-    if (currentSport === 'RUNNING' && runStartTime > 0 && !runFinished) { if (keyCode === LEFT_ARROW && runKeyAlternator === 1) runKeyAlternator = 0; if (keyCode === RIGHT_ARROW && runKeyAlternator === 2) runKeyAlternator = 0;}
-    if ((currentSport === 'LONG_JUMP' && ljPhase === 'run') || (currentSport === 'HIGH_JUMP' && hjPhase === 'run')) { let currentAlternator = (currentSport === 'LONG_JUMP') ? ljKeyAlternator : hjKeyAlternator; if ((key === 'a' || key === 'A') && currentAlternator === 1) { if (currentSport === 'LONG_JUMP') ljKeyAlternator = 0; else hjKeyAlternator = 0; } if ((key === 'd' || key === 'D') && currentAlternator === 2) { if (currentSport === 'LONG_JUMP') ljKeyAlternator = 0; else hjKeyAlternator = 0; } }
-    if (currentSport === 'SWIMMING' && swPhase === 'swim') { if ((key === 'w' || key === 'W') && swKeyAlternator === 1) swKeyAlternator = 0; if ((key === 's' || key === 'S') && swKeyAlternator === 2) swKeyAlternator = 0; }
-    if (currentSport === 'DISCUS' && discusPhase === 'spin' && keyCode === 32) { // SPACE released for Discus Power
-        discusLockedPower = discusCurrentPowerSetting;
-        discusPhase = 'angle';
-        discusAngleMeterD.value = discusAngleMeterD.minValue; discusAngleMeterD.increasing = true;
+    if (currentSport === 'RUNNING' && runStartTime > 0 && !runFinished) { 
+        if (keyCode === LEFT_ARROW && runKeyAlternator === 1) runKeyAlternator = 0; 
+        if (keyCode === RIGHT_ARROW && runKeyAlternator === 2) runKeyAlternator = 0;
+    }
+    
+    if ((currentSport === 'LONG_JUMP' && ljPhase === 'run') || (currentSport === 'HIGH_JUMP' && hjPhase === 'run')) { 
+        let currentAlternator = (currentSport === 'LONG_JUMP') ? ljKeyAlternator : hjKeyAlternator; 
+        // Handle arrow keys and A/D keys
+        if (((keyCode === LEFT_ARROW || key === 'a' || key === 'A') && currentAlternator === 1)) { 
+            if (currentSport === 'LONG_JUMP') ljKeyAlternator = 0; 
+            else hjKeyAlternator = 0; 
+        } 
+        if (((keyCode === RIGHT_ARROW || key === 'd' || key === 'D') && currentAlternator === 2)) { 
+            if (currentSport === 'LONG_JUMP') ljKeyAlternator = 0; 
+            else hjKeyAlternator = 0; 
+        } 
+    }
+    if (currentSport === 'SWIMMING' && swPhase === 'swim') { 
+        if ((keyCode === UP_ARROW || key === 'w' || key === 'W') && swKeyAlternator === 1) swKeyAlternator = 0; 
+        if ((keyCode === DOWN_ARROW || key === 's' || key === 'S') && swKeyAlternator === 2) swKeyAlternator = 0; 
     }
     if (currentSport === 'SKATING' && skPhase === 'charge' && keyCode === 32) { // SPACE released for Skating Charge
         skIsCharging = false; skPhase = 'glide';
+    }
+    
+    if (currentSport === 'ARCHERY' && archPhase === 'charging' && keyCode === 32) { // SPACE released for Archery
+        // When SPACE is released in charging phase, shoot the arrow
+        let launchPower = archPower;
+        resetArrow();
+        archPowerMeter.value = archArcherX + player.size * 0.5; // Starting position of the arrow
+        archPhase = 'flight';
+        console.log("Arrow shot with power:", launchPower); // Debug logging
     }
 }
 
@@ -407,7 +1228,11 @@ function mousePressed() {
             let btnLeft = width/2 - buttonWidth/2; let btnRight = width/2 + buttonWidth/2;
             let btnTop = buttonY - buttonHeight/2; let btnBottom = buttonY + buttonHeight/2;
             if (mouseX > btnLeft && mouseX < btnRight && mouseY > btnTop && mouseY < btnBottom) {
-                currentSport = SPORTS[i]; resetAllSports(); break; 
+                console.log("Selected sport:", SPORTS[i]); // Debug logging
+                currentSport = SPORTS[i]; 
+                console.log("Current sport set to:", currentSport);
+                resetAllSports(); 
+                break; 
             }
         }
     } else if (currentSport === 'SHOOTING') {
@@ -435,7 +1260,8 @@ function windowResized() {
         if (currentSport === 'RUNNING') { resetRunning(); } else if (currentSport === 'LONG_JUMP') { resetLongJump(); }
         else if (currentSport === 'DISCUS') { resetDiscus(); } else if (currentSport === 'HIGH_JUMP') { resetHighJump(); }
         else if (currentSport === 'SWIMMING') { resetSwimming(); } else if (currentSport === 'SKATING') { resetSkating(); }
-        else if (currentSport === 'SHOOTING') { resetShooting(); }
+        else if (currentSport === 'SHOOTING') { resetShooting(); } else if (currentSport === 'ARCHERY') { resetArchery(); }
+        else if (currentSport === 'FOOTBALL') { resetFootball(); }
     }
     // Update fixed positions not covered by reset if needed
     if (currentSport === 'RUNNING') runFinishLineX = width - 100;
@@ -443,4 +1269,12 @@ function windowResized() {
     if (currentSport === 'DISCUS') discusPlayerX = width * 0.2;
     if (currentSport === 'HIGH_JUMP') hjTakeoffX = width * 0.5 - (player.size * 2.8) - player.size;
     if (currentSport === 'SKATING') skFinishLineX_sk = width - 100;
+    if (currentSport === 'ARCHERY') {
+        archTargetCenterX = width * 0.85;
+        archArcherX = width * 0.2;
+    }
+    if (currentSport === 'FOOTBALL') {
+        fbGoalX = width * 0.5 - fbGoalWidth * 0.5;
+        fbGoalkeeperX = fbGoalX + fbGoalWidth * 0.5;
+    }
 }
